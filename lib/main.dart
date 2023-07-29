@@ -1,7 +1,42 @@
+import 'dart:convert';
+
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:word_slider2/word_panel.dart';
+import 'package:word_slider2/word_panel_model.dart';
 
 void main() => runApp(const MyApp());
+
+const String textConstructorJson = '''
+{
+   "text" : "начальный текст в конструкторе, #0|символ",
+   
+   "objects": [
+   
+     {
+      "name" :  "символ",
+      "viewIndex": 1,
+      "views": ["2|вариант-1", "3|вариант-2"]
+     },
+     
+     {
+      "name" :  "объект-3",
+      "viewIndex": 1,
+      "views": ["2|вариант-3", "3|вариант-4"]
+     }
+     
+   ],
+   
+   "styles": ["i", "b", "ccr,bcb", "ccb,bcr,l~g"], 
+   "markStyle" : 1,
+   "basement" : ["слово-1", "слово-2", "#объект-3" ],
+   
+   "canMoveWord" : true,
+   "randomMixWord" : false,
+   "randomView" : false,
+   "notDelFromBasement" : false
+}
+''';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -19,6 +54,12 @@ class MyApp extends StatelessWidget {
 }
 
 class PanelParam {
+  final Color  defaultTextColor;
+  final double fontSize;
+  final Color  borderColor;
+  final double borderWidth;
+  final Color  focusBorderColor;
+  final double focusBorderWidth;
   final Color  editPosColor;
   final Color  insertPosColor;
   final Color  colorWordNormal;
@@ -29,6 +70,12 @@ class PanelParam {
   final double insertPosWidth;
 
   PanelParam({
+    this.defaultTextColor  = Colors.white,
+    this.fontSize          = 50.0,
+    this.borderColor       = Colors.black,
+    this.borderWidth       = 1.0,
+    this.focusBorderColor  = Colors.blue,
+    this.focusBorderWidth  = 2.0,
     this.editPosColor      = Colors.blue,
     this.insertPosColor    = Colors.green,
     this.colorWordNormal   = Colors.grey,
@@ -50,8 +97,39 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final _controller = WordPanelController(text: 'one two three five six seven eight nine ten eleven twelve');
-  final _param = PanelParam();
+  late TextConstructor _textConstructor;
+  late WordPanelController _controller;
+
+  final Color  _defaultTextColor  = Colors.white;
+  final double _fontSize          = 50.0;
+  final Color  _borderColor      = Colors.black;
+  final double _borderWidth      = 1.0;
+  final Color  _focusBorderColor  = Colors.blue;
+  final double _focusBorderWidth  = 2.0;
+  final Color  _editPosColor      = Colors.blue;
+  final Color  _insertPosColor    = Colors.green;
+  final Color  _colorWordNormal   = Colors.grey;
+  final Color  _colorWordSelected = Colors.yellow;
+  final Color  _colorWordCanDrop  = Colors.amber;
+  final Color  _colorWordMove     = Colors.black12;
+  final double _editPosWidth      = 10;
+  final double _insertPosWidth    = 10;
+  
+  final Map<String, Color> _colorMap = {
+    'r' : Colors.red,
+    'g' : Colors.green,
+    'b' : Colors.blue,
+    'y' : Colors.yellow,
+    'o' : Colors.orange,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+
+    _textConstructor = TextConstructor.fromMap(jsonDecode(textConstructorJson));
+    _controller = WordPanelController(text: _textConstructor.text);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +148,7 @@ class _MyHomePageState extends State<MyHomePage> {
           onDragBoxBuild: onDragBoxBuild,
           onDragBoxTap: onDragBoxTap,
           onDragBoxLongPress: onDragBoxLongPress,
+          onDoubleTap: onDragBoxLongPress,
         )
     );
   }
@@ -77,98 +156,275 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<String?> onDragBoxTap(String label, Offset position) async {
     return label;
-    // boxState.color == _param.colorWordNormal ? boxState.color = _param.colorWordSelected : boxState.color = _param.colorWordNormal;
+    // boxState.color == colorWordNormal ? boxState.color = colorWordSelected : boxState.color = colorWordNormal;
   }
 
   Future<String?> onDragBoxLongPress(String label, Offset position) async {
-    final value = await showMenu<String>(
-        context: context,
-        position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 100, position.dy + 100),
-        items: [
-          const PopupMenuItem(
-            value: '1',
-            child: Text("View"),
-          ),
-          const PopupMenuItem(
-            value: '2',
-            child: Text("Edit"),
-          ),
-          const PopupMenuItem(
-            value: '3',
-            child: Text("Delete"),
-          ),
-        ]
-    );
-
-    return value;
+     return showPopupMenu(label, position);
   }
 
-  Widget onDragBoxBuild(BuildContext context, String label, DragBoxSpec spec, Offset position) {
-    if (spec == DragBoxSpec.editPos){
-      return Positioned(
-          left: position.dx,
-          top: position.dy,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.all(Radius.circular(3)),
-              color: _param.editPosColor,
-            ),
-            width: _param.editPosWidth,
-            height: _controller.wordBoxHeight,
-          )
-      );
-    }
-
-    if (spec == DragBoxSpec.insertPos){
-      return Positioned(
-          left: position.dx,
-          top: position.dy,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.all(Radius.circular(3)),
-              color: _param.insertPosColor,
-            ),
-            width: _param.insertPosWidth,
-            height: _controller.wordBoxHeight,
-          )
-      );
-    }
-
-    var color = _param.colorWordNormal;
-    if (spec == DragBoxSpec.move) {
-      color = _param.colorWordMove;
-    }
-    if (spec == DragBoxSpec.canDrop) {
-      color = _param.colorWordCanDrop;
-    }
-    if (spec == DragBoxSpec.focus) {
-      color = _param.colorWordSelected;
-    }
-
+  Widget editPos(Offset position) {
     return Positioned(
         left: position.dx,
         top: position.dy,
         child: Container(
-          padding: const EdgeInsets.only(left: 10, right: 10),
           decoration: BoxDecoration(
-            border: Border.all(
-              color: Colors.black,
-            ),
-            borderRadius: const BorderRadius.all(Radius.circular(20)),
-            color: color,
+            borderRadius: const BorderRadius.all(Radius.circular(3)),
+            color: _editPosColor,
           ),
-          child: Center(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                decoration: TextDecoration.none,
-                fontSize: 50.0,
-              ),
-            ),
-          ),
+          width: _editPosWidth,
+          height: _controller.wordBoxHeight,
         )
     );
+  }
+
+  Widget insertPos(Offset position) {
+    return Positioned(
+        left: position.dx,
+        top: position.dy,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.all(Radius.circular(3)),
+            color: _insertPosColor,
+          ),
+          width: _insertPosWidth,
+          height: _controller.wordBoxHeight,
+        )
+    );
+  }
+
+  Widget onDragBoxBuild(BuildContext context, String label, DragBoxSpec spec, Offset position) {
+    if (spec == DragBoxSpec.editPos){
+      return editPos(position);
+    }
+
+    if (spec == DragBoxSpec.insertPos){
+      return insertPos(position);
+    }
+
+    return outLabel(context, label, spec, position);
+  }
+
+  Widget outLabel(BuildContext context, String label, DragBoxSpec spec, Offset position) {
+    if (label.isEmpty) return Container();
+
+    var viewIndex = -1;
+
+    Widget widget;
+
+    if (label.substring(0, 1) == '#') {
+      String objectName;
+      if (label.substring(2,3) == '|') {
+        objectName = label.substring(3);
+        viewIndex = int.parse(label.substring(1,2));
+      } else {
+        objectName = label.substring(1);
+      }
+
+      final wordObject = _textConstructor.objects.firstWhereOrNull((wordObject) => wordObject.name == objectName)!;
+
+      if (viewIndex < 0) {
+        viewIndex = wordObject.viewIndex;
+      }
+
+      final viewStr = wordObject.views[viewIndex];
+
+      widget = getObjectViewWidget(context, objectName: objectName, viewStr: viewStr, spec: spec );
+    } else {
+      widget = getObjectViewWidget(context, label: label, spec : spec );
+    }
+
+    return Positioned(
+      left  : position.dx,
+      top   : position.dy,
+      child : widget
+    );
+  }
+
+  Widget getObjectViewWidget(BuildContext context, {String label = '', String objectName = '', String viewStr = '', DragBoxSpec spec = DragBoxSpec.none, bool forPopup = false}) {
+    var textStyleBold   = false;
+    var textStyleItalic = false;
+
+    var textColor       = _defaultTextColor;
+    var backgroundColor = _colorWordNormal;
+
+    var lineColor = Colors.black;
+    var linePos   = TextDecoration.none;
+    var lineStyle = TextDecorationStyle.solid;
+
+    var borderColor = _borderColor;
+    var borderWidth = _borderWidth;
+
+    var outStr = '';
+
+    if (objectName.isNotEmpty) {
+      var styleIndex = -1;
+
+      final viewSplit1 = viewStr.split('|');
+      if (viewSplit1.length == 1) {
+        outStr = viewSplit1[0];
+      } else {
+        outStr = viewSplit1[1];
+
+        final styleIndexStr = viewSplit1[0].split('/')[0];
+        if (styleIndexStr.isNotEmpty) {
+          styleIndex = int.parse(styleIndexStr);
+        }
+      }
+
+      if (outStr.isEmpty) {
+        outStr = objectName;
+      }
+
+      if (styleIndex >= 0) {
+        final styleStr = _textConstructor.styles[styleIndex];
+        final subStyleList = styleStr.split(',');
+
+        for (var subStyle in subStyleList) {
+          final subStyleStr = subStyle.trim().toLowerCase();
+          final subStyleLen = subStyleStr.length;
+
+          if (subStyleLen == 1) {
+            if (subStyleStr == 'b') {
+              textStyleBold = true;
+            }
+            if (subStyleStr == 'i') {
+              textStyleItalic = true;
+            }
+          }
+
+          if (subStyleLen == 3) {
+            final formatCh = subStyleStr.substring(0,1);
+            final formatId = subStyleStr.substring(0,2);
+            final colorKey = subStyleStr.substring(2,3);
+
+            if (formatId == 'cc') {
+              textColor = _colorMap[colorKey]!;
+            }
+            if (formatId == 'bc') {
+              backgroundColor = _colorMap[colorKey]!;
+            }
+
+            if (formatCh == 'l') {
+              linePos = TextDecoration.underline;
+              lineColor = _colorMap[colorKey]!;
+
+              if (formatId == 'l_') {
+                lineStyle = TextDecorationStyle.solid;
+              }
+              if (formatId == 'l~') {
+                lineStyle = TextDecorationStyle.wavy;
+              }
+              if (formatId == 'l=') {
+                lineStyle = TextDecorationStyle.double;
+              }
+              if (formatId == 'l-') {
+                lineStyle = TextDecorationStyle.dashed;
+              }
+              if (formatId == 'l.') {
+                lineStyle = TextDecorationStyle.dotted;
+              }
+            }
+
+            if (formatCh == 'd') {
+              linePos = TextDecoration.lineThrough;
+              lineColor = _colorMap[colorKey]!;
+
+              if (formatId == 'd=') {
+                lineStyle = TextDecorationStyle.double;
+              }
+              if (formatId == 'd-') {
+                lineStyle = TextDecorationStyle.solid;
+              }
+            }
+          }
+
+        }
+      }
+    }
+
+    if (label.isNotEmpty) {
+      outStr = label;
+    }
+
+    if (spec == DragBoxSpec.move) {
+      backgroundColor = _colorWordMove;
+    }
+    if (spec == DragBoxSpec.canDrop) {
+      backgroundColor = _colorWordCanDrop;
+    }
+    if (spec == DragBoxSpec.focus) {
+      borderColor = _focusBorderColor;
+      borderWidth = _focusBorderWidth;
+    }
+
+    final widget = Container(
+      color: backgroundColor,
+      child: Text(
+        outStr,
+        style: TextStyle(
+          color: textColor,
+
+          decoration     : linePos,
+          decorationColor: lineColor,
+          decorationStyle: lineStyle,
+
+          fontSize: _fontSize,
+          fontWeight: textStyleBold? FontWeight.bold : null,
+          fontStyle: textStyleItalic? FontStyle.italic : null,
+        ),
+      ),
+    );
+
+    if (forPopup) {
+      return widget;
+    }
+
+    return  Container(
+      padding: const EdgeInsets.only(left: 10, right: 10),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: borderColor,
+          width: borderWidth,
+        ),
+        borderRadius: const BorderRadius.all(Radius.circular(20)),
+        color: backgroundColor,
+      ),
+      child: widget,
+    );
+
+  }
+
+  Future<String?> showPopupMenu(String label, Offset position) async {
+    if (label.isEmpty) return null;
+    if (label.substring(0, 1) != '#') return null;
+
+    String objectName;
+    if (label.substring(2,3) == '|') {
+      objectName = label.substring(3);
+    } else {
+      objectName = label.substring(1);
+    }
+
+    final wordObject = _textConstructor.objects.firstWhereOrNull((wordObject) => wordObject.name == objectName)!;
+
+    final popupItems = <PopupMenuEntry<String>>[];
+
+    for ( var i = 0; i < wordObject.views.length; i++ ) {
+      final viewStr = wordObject.views[i];
+      popupItems.add( PopupMenuItem(
+        value: '#$i|$objectName',
+        child: getObjectViewWidget(context, objectName: objectName, viewStr: viewStr, forPopup: true),
+      ));
+    }
+
+    final value = await showMenu<String>(
+      context  : context,
+      position : RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 100, position.dy + 100),
+      items    : popupItems,
+    );
+
+    return value;
   }
 
   void pressTest(){
