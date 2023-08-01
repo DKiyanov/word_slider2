@@ -134,7 +134,7 @@ class WordPanelState extends State<WordPanel> {
   double _editPosWidth   = 0.0;
   double _insertPosWidth = 0.0;
 
-  double wordBoxHeight = 1;
+  double wordBoxHeight = 0;
 
   @override
   void initState() {
@@ -359,6 +359,7 @@ class WordPanelState extends State<WordPanel> {
       });
     }
   }
+
   void _onPanUpdate(DragUpdateDetails details) {
     if (_selectedBoxInfo == null) return;
 

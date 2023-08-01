@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:word_slider2/word_grid.dart';
 import 'package:word_slider2/word_panel.dart';
 import 'package:word_slider2/word_panel_model.dart';
 
@@ -16,7 +17,7 @@ const String textConstructorJson = '''
      {
       "name" :  "символ",
       "viewIndex": 1,
-      "views": ["2|вариант-1", "3|вариант-2"]
+      "views": ["2|", "3|"]
      },
      
      {
@@ -53,40 +54,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class PanelParam {
-  final Color  defaultTextColor;
-  final double fontSize;
-  final Color  borderColor;
-  final double borderWidth;
-  final Color  focusBorderColor;
-  final double focusBorderWidth;
-  final Color  editPosColor;
-  final Color  insertPosColor;
-  final Color  colorWordNormal;
-  final Color  colorWordSelected;
-  final Color  colorWordCanDrop;
-  final Color  colorWordMove;
-  final double editPosWidth;
-  final double insertPosWidth;
-
-  PanelParam({
-    this.defaultTextColor  = Colors.white,
-    this.fontSize          = 50.0,
-    this.borderColor       = Colors.black,
-    this.borderWidth       = 1.0,
-    this.focusBorderColor  = Colors.blue,
-    this.focusBorderWidth  = 2.0,
-    this.editPosColor      = Colors.blue,
-    this.insertPosColor    = Colors.green,
-    this.colorWordNormal   = Colors.grey,
-    this.colorWordSelected = Colors.yellow,
-    this.colorWordCanDrop  = Colors.amber,
-    this.colorWordMove     = Colors.black12,
-    this.editPosWidth      = 10,
-    this.insertPosWidth    = 10,
-  });
-}
-
 class MyHomePage extends StatefulWidget {
   const MyHomePage({required this.title, Key? key}) : super(key: key);
 
@@ -101,7 +68,7 @@ class _MyHomePageState extends State<MyHomePage> {
   late WordPanelController _controller;
 
   final Color  _defaultTextColor  = Colors.white;
-  final double _fontSize          = 50.0;
+  final double _fontSize          = 40.0;
   final Color  _borderColor      = Colors.black;
   final double _borderWidth      = 1.0;
   final Color  _focusBorderColor  = Colors.blue;
@@ -109,7 +76,7 @@ class _MyHomePageState extends State<MyHomePage> {
   final Color  _editPosColor      = Colors.blue;
   final Color  _insertPosColor    = Colors.green;
   final Color  _colorWordNormal   = Colors.grey;
-  final Color  _colorWordSelected = Colors.yellow;
+//  final Color  _colorWordSelected = Colors.yellow;
   final Color  _colorWordCanDrop  = Colors.amber;
   final Color  _colorWordMove     = Colors.black12;
   final double _editPosWidth      = 10;
@@ -143,12 +110,25 @@ class _MyHomePageState extends State<MyHomePage> {
             )
           ],
         ),
-        body: WordPanel(
-          controller: _controller,
-          onDragBoxBuild: onDragBoxBuild,
-          onDragBoxTap: onDragBoxTap,
-          onDragBoxLongPress: onDragBoxLongPress,
-          onDoubleTap: onDragBoxLongPress,
+        body: Column(
+          children: [
+            Expanded(
+              child: WordPanel(
+                controller         : _controller,
+                onDragBoxBuild     : onDragBoxBuild,
+                onDragBoxTap       : onDragBoxTap,
+                onDragBoxLongPress : onDragBoxLongPress,
+                onDoubleTap        : onDragBoxLongPress,
+              ),
+            ),
+
+            Expanded(
+              child: WordGrid(
+                text           : 'начальный текст в конструкторе, #0|символ',
+                onDrawBoxBuild : onDrawBoxBuild,
+              )
+            ),
+          ],
         )
     );
   }
@@ -205,6 +185,10 @@ class _MyHomePageState extends State<MyHomePage> {
     return outLabel(context, label, spec, position);
   }
 
+  Widget onDrawBoxBuild(BuildContext context, String label, Offset position) {
+    return outLabel(context, label, DragBoxSpec.none, position);
+  }
+
   Widget outLabel(BuildContext context, String label, DragBoxSpec spec, Offset position) {
     if (label.isEmpty) return Container();
 
@@ -255,6 +239,8 @@ class _MyHomePageState extends State<MyHomePage> {
     var borderColor = _borderColor;
     var borderWidth = _borderWidth;
 
+    var menuText = '';
+
     var outStr = '';
 
     if (objectName.isNotEmpty) {
@@ -266,9 +252,13 @@ class _MyHomePageState extends State<MyHomePage> {
       } else {
         outStr = viewSplit1[1];
 
-        final styleIndexStr = viewSplit1[0].split('/')[0];
+        final viewSplit2 = viewSplit1[0].split('/');
+        final styleIndexStr = viewSplit2[0];
         if (styleIndexStr.isNotEmpty) {
           styleIndex = int.parse(styleIndexStr);
+        }
+        if (viewSplit2.length > 1) {
+          menuText = viewSplit2[1];
         }
       }
 
@@ -347,6 +337,10 @@ class _MyHomePageState extends State<MyHomePage> {
       outStr = label;
     }
 
+    if (forPopup && menuText.isNotEmpty) {
+      outStr = menuText;
+    }
+
     if (spec == DragBoxSpec.move) {
       backgroundColor = _colorWordMove;
     }
@@ -377,7 +371,18 @@ class _MyHomePageState extends State<MyHomePage> {
     );
 
     if (forPopup) {
-      return widget;
+      return  Container(
+        padding: const EdgeInsets.only(left: 10, right: 10),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: _borderColor,
+            width: _borderWidth,
+          ),
+          borderRadius: const BorderRadius.all(Radius.circular(20)),
+          color: backgroundColor,
+        ),
+        child: widget,
+      );
     }
 
     return  Container(
@@ -414,14 +419,16 @@ class _MyHomePageState extends State<MyHomePage> {
       final viewStr = wordObject.views[i];
       popupItems.add( PopupMenuItem(
         value: '#$i|$objectName',
-        child: getObjectViewWidget(context, objectName: objectName, viewStr: viewStr, forPopup: true),
+        padding: EdgeInsets.zero,
+        child: Center(child: getObjectViewWidget(context, objectName: objectName, viewStr: viewStr, forPopup: true))
       ));
     }
 
     final value = await showMenu<String>(
       context  : context,
-      position : RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 100, position.dy + 100),
+      position : RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
       items    : popupItems,
+      shape: const RoundedRectangleBorder( borderRadius: BorderRadius.all(Radius.circular(5)) ),
     );
 
     return value;
