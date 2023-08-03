@@ -129,12 +129,15 @@ class WordPanelState extends State<WordPanel> {
   Offset? _selectInPos;
   bool _rebuildStrNeed = false;
 
-  Size? _prevStackSize;
+  double _width = 0.0;
+  double _height = 0.0;
 
   double _editPosWidth   = 0.0;
   double _insertPosWidth = 0.0;
 
   double wordBoxHeight = 0;
+
+  bool _starting = true;
 
   @override
   void initState() {
@@ -157,22 +160,18 @@ class WordPanelState extends State<WordPanel> {
     _rebuildStrNeed = true;
   }
 
-  _rebuildStr(){
+  _rebuildStr(double width){
     if (!_rebuildStrNeed) {
-      // We check if the dimensions of the panel have changed, if they have changed - the line needs to be rebuilt
-      final stackSize = _getStackRenderBox().size;
-      if (_prevStackSize != null) {
-        if (stackSize.width != _prevStackSize!.width || stackSize.height != _prevStackSize!.height){
-          _rebuildStrNeed = true;
-        }
+      if (_width != width) {
+        _rebuildStrNeed = true;
+        _width = width;
+        _starting = true;
       }
-      _prevStackSize = stackSize;
     }
 
     if (_rebuildStrNeed) {
       _rebuildStrNeed = false;
-      _getBoxesRect();
-      _buildBoxesString();
+      _buildBoxesString(width);
 
       _editPosWidth   = _getDragBoxRenderBox(_editPos).size.width;
       _insertPosWidth = _getDragBoxRenderBox(_insertPos).size.width;
@@ -191,26 +190,9 @@ class WordPanelState extends State<WordPanel> {
     return dragBoxKey(dragBox).currentContext!.findRenderObject() as RenderBox;
   }
 
-  void _getBoxesRect(){
-    final renderBox = _getStackRenderBox();
-
-    for (var boxInfo in _boxInfoList) {
-      final boxRenderBox = _getDragBoxRenderBox(boxInfo.boxWidget);
-      final boxSize = boxRenderBox.size;
-      final boxPos  = renderBox.globalToLocal(boxRenderBox.localToGlobal(Offset.zero));
-      boxInfo.rect = Rect.fromLTWH(boxPos.dx, boxPos.dy, boxSize.width, boxSize.height);
-    }
-  }
-
-  void _buildBoxesString(){
+  void _buildBoxesString(double width){
     wordBoxHeight = 0;
-    for (var boxInfo in _boxInfoList) {
-      if (wordBoxHeight < boxInfo.rect.height ) {
-        wordBoxHeight = boxInfo.rect.height;
-      }
-    }
 
-    final stackSize = _getStackRenderBox().size;
     var position = const Offset(0,0);
     Offset nextPosition;
 
@@ -218,14 +200,22 @@ class WordPanelState extends State<WordPanel> {
       final boxInfo = _boxInfoList[i];
       final boxKey = dragBoxKey(boxInfo.boxWidget);
 
-      nextPosition = Offset(position.dx + boxInfo.rect.width, position.dy);
-      if (nextPosition.dx >= stackSize.width){
+      final renderBox = boxKey.currentContext!.findRenderObject() as RenderBox;
+
+      if (wordBoxHeight == 0.0) {
+        wordBoxHeight = renderBox.size.height;
+        _height = wordBoxHeight;
+      }
+
+      nextPosition = Offset(position.dx + renderBox.size.width, position.dy);
+      if (nextPosition.dx >= width){
         position = Offset(0, position.dy + wordBoxHeight + widget.lineSpacing);
-        nextPosition = Offset(position.dx + boxInfo.rect.width, position.dy);
+        nextPosition = Offset(position.dx + renderBox.size.width, position.dy);
+        _height = position.dy + wordBoxHeight;
       }
 
       boxKey.currentState!.setState((){
-        boxInfo.rect = Rect.fromLTWH(position.dx, position.dy, boxInfo.rect.width, boxInfo.rect.height);
+        boxInfo.rect = Rect.fromLTWH(position.dx, position.dy, renderBox.size.width, renderBox.size.height);
         boxKey.currentState!.position = position;
       });
 
@@ -282,7 +272,7 @@ class WordPanelState extends State<WordPanel> {
         _boxInfoList.removeAt(fromPos);
       }
     }
-    _buildBoxesString();
+    _buildBoxesString(_width);
   }
 
   void _insertText(int pos, String text){
@@ -322,24 +312,46 @@ class WordPanelState extends State<WordPanel> {
     childList.add(_editPos);
     childList.add(_insertPos);
 
-    return OrientationBuilder( builder: (context, orientation) {
+    return LayoutBuilder(builder: (BuildContext context, BoxConstraints viewportConstraints) {
 
       WidgetsBinding.instance.addPostFrameCallback((_){
-        _rebuildStr();
+        _rebuildStr(viewportConstraints.maxWidth);
+
+        if (_starting) {
+          setState(() {
+            _starting = false;
+          });
+        }
       });
 
-      return GestureDetector(
-          onPanStart:       (details) => _onPanStart(details),
-          onPanUpdate:      (details) => _onPanUpdate(details),
-          onPanEnd:         (details) => _onPanEnd(details),
-          onTapUp:          (details) => _onTapUp(details),
-          onLongPressStart: (details) => _tapProcess(widget.onDragBoxLongPress, details.globalPosition),
-          onDoubleTapDown:  (details) => _tapProcess(widget.onDoubleTap, details.globalPosition),
+      if (_starting) {
+        return Offstage(
           child: Stack(
-            key : _stackKey,
             children: childList,
-          )
+          ),
+        );
+      }
+
+      return SingleChildScrollView(
+        child: GestureDetector(
+            onPanStart:       (details) => _onPanStart(details),
+            onPanUpdate:      (details) => _onPanUpdate(details),
+            onPanEnd:         (details) => _onPanEnd(details),
+            onTapUp:          (details) => _onTapUp(details),
+            onLongPressStart: (details) => _tapProcess(widget.onDragBoxLongPress, details.globalPosition),
+            onDoubleTapDown:  (details) => _tapProcess(widget.onDoubleTap, details.globalPosition),
+            child: SizedBox(
+              width: _width,
+              height: _height,
+
+              child: Stack(
+                key : _stackKey,
+                children: childList,
+              ),
+            )
+        ),
       );
+
     });
   }
 
@@ -453,7 +465,7 @@ class WordPanelState extends State<WordPanel> {
         }
         _boxInfoList.insert(insertIndex, boxInfo);
 
-        _buildBoxesString();
+        _buildBoxesString(_width);
       }
 
       insertPosState.setState((){

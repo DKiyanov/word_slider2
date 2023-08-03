@@ -190,6 +190,14 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget outLabel(BuildContext context, String label, DragBoxSpec spec, Offset position) {
+    return Positioned(
+        left  : position.dx,
+        top   : position.dy,
+        child : labelWidget(context, label, spec)
+    );
+  }
+
+  Widget labelWidget(BuildContext context, String label, DragBoxSpec spec) {
     if (label.isEmpty) return Container();
 
     var viewIndex = -1;
@@ -218,11 +226,7 @@ class _MyHomePageState extends State<MyHomePage> {
       widget = getObjectViewWidget(context, label: label, spec : spec );
     }
 
-    return Positioned(
-      left  : position.dx,
-      top   : position.dy,
-      child : widget
-    );
+    return widget;
   }
 
   Widget getObjectViewWidget(BuildContext context, {String label = '', String objectName = '', String viewStr = '', DragBoxSpec spec = DragBoxSpec.none, bool forPopup = false}) {
