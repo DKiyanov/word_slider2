@@ -46,6 +46,13 @@ class WordPanelController{
     return _panelState!._getCursorPos();
   }
 
+  void setCursorPos(int pos) {
+    if (_panelState == null) return;
+    if (!_panelState!.mounted) return;
+
+    return _panelState!._setCursorPos(pos);
+  }
+
   void _setText(String text) {
     _text = text;
 
@@ -154,10 +161,45 @@ class WordPanelState extends State<WordPanel> {
     _boxInfoList.clear();
     _sensRectList.clear();
 
-    text.split(' ').forEach((word){
-      _boxInfoList.add(DragBoxInfo(DragBox(label: word, onBuild: widget.onDragBoxBuild, key: GlobalKey<DragBoxState>())));
-    });
+    _boxInfoList.addAll(_splitText(text));
+
     _rebuildStrNeed = true;
+  }
+
+  List<DragBoxInfo> _splitText(String text) {
+    if (text.isEmpty) return [];
+
+    final result = <DragBoxInfo>[];
+
+    final wordList = <String>[];
+
+    final subStrList = text.split('"');
+
+    bool solid = false;
+
+    for (var subStr in subStrList) {
+      if (solid) {
+        wordList.add(subStr);
+      } else {
+        wordList.addAll(subStr.split(' '));
+      }
+
+      solid = !solid;
+    }
+
+    for (var word in wordList) {
+      if (word.isNotEmpty) {
+        result.add(
+            DragBoxInfo(DragBox(
+                label   : word,
+                onBuild : widget.onDragBoxBuild,
+                key     : GlobalKey<DragBoxState>()
+            ))
+        );
+      }
+    }
+
+    return result;
   }
 
   _rebuildStr(double width){
@@ -276,30 +318,55 @@ class WordPanelState extends State<WordPanel> {
   }
 
   void _insertText(int pos, String text){
-    int lPos = pos;
-    text.split(' ').forEach((word){
-      _boxInfoList.insert(lPos, DragBoxInfo(DragBox(label: word, onBuild: widget.onDragBoxBuild, key: GlobalKey<DragBoxState>())));
-      lPos += 1;
-    });
+    _boxInfoList.insertAll(pos, _splitText(text));
     _rebuildStrNeed = true;
   }
 
   int _getCursorPos(){
     final editPosState = dragBoxKey(_editPos).currentState;
     final editPosCenter = Offset(editPosState!.position.dx + _editPosWidth / 2, editPosState.position.dy + wordBoxHeight/ 2);
-    int editIndex = 0;
+
     for (var i = 0; i < _boxInfoList.length; i++) {
       final boxInfo = _boxInfoList[i];
       if (boxInfo.rect.top < editPosCenter.dy && boxInfo.rect.bottom > editPosCenter.dy){
-        if (boxInfo.rect.left > editPosCenter.dx) return editIndex;
-        editIndex = i;
+        if (boxInfo.rect.right > editPosCenter.dx) {
+          return i;
+        }
       }
     }
 
-    return editIndex;
+    return _boxInfoList.length;
+  }
+
+  void _setCursorPos(int pos) {
+    final editPosState = dragBoxKey(_editPos).currentState;
+
+    if (_boxInfoList.isEmpty) {
+      editPosState!.setState((){
+        editPosState.position = Offset(_editPosWidth / 2, 0);
+      });
+      return;
+    }
+
+    if (pos >= _boxInfoList.length) {
+      final boxInfo = _boxInfoList.last;
+      editPosState!.setState((){
+        editPosState.position = Offset(boxInfo.rect.right - _editPosWidth / 2, boxInfo.rect.center.dy - wordBoxHeight / 2);
+      });
+      return;
+    }
+
+    if (pos < 0) pos = 0;
+    final boxInfo = _boxInfoList[pos];
+
+    editPosState!.setState((){
+      editPosState.position = Offset(boxInfo.rect.left - _editPosWidth / 2, boxInfo.rect.center.dy - wordBoxHeight / 2);
+    });
+
   }
 
   void _refresh() {
+    _starting = true;
     setState(() {});
   }
 
@@ -565,7 +632,7 @@ enum DragBoxSpec {
   editPos,
 }
 
-typedef DragBoxBuilder = Widget Function(BuildContext context, String label, DragBoxSpec spec, Offset position);
+typedef DragBoxBuilder = Widget Function(BuildContext context, String label, DragBoxSpec spec);
 typedef DragBoxTap = Future<String?> Function(String label, Offset position);
 
 class DragBox extends StatefulWidget {
@@ -607,6 +674,10 @@ class DragBoxState extends State<DragBox> {
       );
     }
 
-    return widget.onBuild.call(context, label, spec, position);
+    return Positioned(
+        left  : position.dx,
+        top   : position.dy,
+        child: widget.onBuild.call(context, label, spec)
+    );
   }
 }

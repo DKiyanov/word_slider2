@@ -90,6 +90,8 @@ class _MyHomePageState extends State<MyHomePage> {
     'o' : Colors.orange,
   };
 
+  final _historyList = <String>[];
+
   @override
   void initState() {
     super.initState();
@@ -103,29 +105,82 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
         appBar: AppBar(
           title: Text(widget.title),
-          actions: <Widget>[
-            IconButton(
-              icon: const Icon(Icons.accessibility),
-              onPressed: pressTest,
-            )
-          ],
         ),
         body: Column(
           children: [
             Expanded(
-              child: WordPanel(
-                controller         : _controller,
-                onDragBoxBuild     : onDragBoxBuild,
-                onDragBoxTap       : onDragBoxTap,
-                onDragBoxLongPress : onDragBoxLongPress,
-                onDoubleTap        : onDragBoxLongPress,
+              child: Padding(
+                padding: const EdgeInsets.all(6.0),
+                child: WordPanel(
+                  controller         : _controller,
+                  onDragBoxBuild     : onDragBoxBuild,
+                  onDragBoxTap       : onDragBoxTap,
+                  onDragBoxLongPress : onDragBoxLongPress,
+                  onDoubleTap        : onDragBoxLongPress,
+                ),
               ),
             ),
 
+            BottomAppBar(
+              color: Colors.blue,
+              child: IconTheme(
+                data: IconThemeData(color: Theme.of(context).colorScheme.onPrimary),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+
+                  IconButton(
+                    onPressed: (){},
+                    icon: const Icon(Icons.keyboard_alt_outlined),
+                  ),
+
+                  IconButton(
+                    onPressed: (){},
+                    icon: const Icon(Icons.undo_outlined),
+                  ),
+
+                  IconButton(
+                    onPressed: (){},
+                    icon: const Icon(Icons.redo_outlined),
+                  ),
+
+                  IconButton(
+                    onPressed: (){
+                      final pos = _controller.getCursorPos() - 1;
+                      if (pos < 0) return;
+                      _controller.deleteWord(pos);
+                      _controller.refreshPanel();
+                      _controller.setCursorPos(pos);
+                    },
+                    icon: const Icon(Icons.backspace_outlined),
+                  ),
+
+                  IconButton(
+                      onPressed: (){
+                        final pos = _controller.getCursorPos();
+                        _controller.deleteWord(pos);
+                        _controller.refreshPanel();
+                        _controller.setCursorPos(pos);
+                      },
+                      icon: const Icon(Icons.delete_outline),
+                  ),
+
+                  IconButton(
+                    onPressed: (){
+                      _controller.text = '';
+                    },
+                    icon: const Icon(Icons.clear_outlined),
+                  ),
+                ]),
+              )
+            ),
+
             Expanded(
-              child: WordGrid(
-                text           : 'начальный текст в конструкторе, #0|символ',
-                onDrawBoxBuild : onDrawBoxBuild,
+              child: Padding(
+                padding: const EdgeInsets.all(6.0),
+                child: WordGrid(
+                  text           : '<|G1|>на "ч аль" ны й текст <|G2|>в конструкторе, #0|символ',
+                  onDrawBoxBuild : onBasementBoxBuild,
+                  onDrawBoxTap: onBasementBoxTap,
+                ),
               )
             ),
           ],
@@ -143,66 +198,48 @@ class _MyHomePageState extends State<MyHomePage> {
      return showPopupMenu(label, position);
   }
 
-  Widget editPos(Offset position) {
-    return Positioned(
-        left: position.dx,
-        top: position.dy,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.all(Radius.circular(3)),
-            color: _editPosColor,
-          ),
-          width: _editPosWidth,
-          height: _controller.wordBoxHeight,
-        )
+  Widget editPos() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(3)),
+        color: _editPosColor,
+      ),
+      width: _editPosWidth,
+      height: _controller.wordBoxHeight,
     );
   }
 
-  Widget insertPos(Offset position) {
-    return Positioned(
-        left: position.dx,
-        top: position.dy,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.all(Radius.circular(3)),
-            color: _insertPosColor,
-          ),
-          width: _insertPosWidth,
-          height: _controller.wordBoxHeight,
-        )
+  Widget insertPos() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(3)),
+        color: _insertPosColor,
+      ),
+      width: _insertPosWidth,
+      height: _controller.wordBoxHeight,
     );
   }
 
-  Widget onDragBoxBuild(BuildContext context, String label, DragBoxSpec spec, Offset position) {
+  Widget onDragBoxBuild(BuildContext context, String label, DragBoxSpec spec) {
     if (spec == DragBoxSpec.editPos){
-      return editPos(position);
+      return editPos();
     }
 
     if (spec == DragBoxSpec.insertPos){
-      return insertPos(position);
+      return insertPos();
     }
 
-    return outLabel(context, label, spec, position);
+    return labelWidget(context, label, spec);
   }
 
-  Widget onDrawBoxBuild(BuildContext context, String label, Offset position) {
-    return outLabel(context, label, DragBoxSpec.none, position);
-  }
-
-  Widget outLabel(BuildContext context, String label, DragBoxSpec spec, Offset position) {
-    return Positioned(
-        left  : position.dx,
-        top   : position.dy,
-        child : labelWidget(context, label, spec)
-    );
+  Widget onBasementBoxBuild(BuildContext context, String label) {
+    return labelWidget(context, label, DragBoxSpec.none);
   }
 
   Widget labelWidget(BuildContext context, String label, DragBoxSpec spec) {
     if (label.isEmpty) return Container();
 
     var viewIndex = -1;
-
-    Widget widget;
 
     if (label.substring(0, 1) == '#') {
       String objectName;
@@ -221,12 +258,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
       final viewStr = wordObject.views[viewIndex];
 
-      widget = getObjectViewWidget(context, objectName: objectName, viewStr: viewStr, spec: spec );
-    } else {
-      widget = getObjectViewWidget(context, label: label, spec : spec );
+      return getObjectViewWidget(context, objectName: objectName, viewStr: viewStr, spec: spec );
     }
 
-    return widget;
+    return getObjectViewWidget(context, label: label, spec : spec );
   }
 
   Widget getObjectViewWidget(BuildContext context, {String label = '', String objectName = '', String viewStr = '', DragBoxSpec spec = DragBoxSpec.none, bool forPopup = false}) {
@@ -438,10 +473,10 @@ class _MyHomePageState extends State<MyHomePage> {
     return value;
   }
 
-  void pressTest(){
+  Future<bool?> onBasementBoxTap(String label, Offset position) async {
     final curPos = _controller.getCursorPos();
-    _controller.deleteWord(curPos);
-    _controller.insertText(curPos, '123 456');
+    _controller.insertText(curPos, label);
     _controller.refreshPanel();
+    return false;
   }
 }
