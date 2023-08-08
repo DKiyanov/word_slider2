@@ -5,7 +5,9 @@ import 'package:collection/collection.dart';
 class WordPanelController{
   WordPanelState? _panelState;
 
-  WordPanelController({String text = ''}){
+  VoidCallback? onChange;
+
+  WordPanelController({String text = '', this.onChange}){
     _text = text;
   }
 
@@ -77,6 +79,13 @@ class WordPanelController{
     _panelState!._insertText(pos, text);
   }
 
+  void insertWord(int pos, String word) {
+    if (_panelState == null) return;
+    if (!_panelState!.mounted) return;
+
+    _panelState!._insertWord(pos, word);
+  }
+
   void refreshPanel() {
     if (_panelState == null) return;
     if (!_panelState!.mounted) return;
@@ -85,10 +94,16 @@ class WordPanelController{
   }
 }
 
+class ValueProxy{
+  String value;
+  ValueProxy(this.value);
+}
+
 class DragBoxInfo{
   final DragBox boxWidget;
+  final ValueProxy label;
   Rect rect = Rect.zero;
-  DragBoxInfo(this.boxWidget);
+  DragBoxInfo(this.boxWidget, this.label);
 }
 
 GlobalKey<DragBoxState> dragBoxKey(DragBox dragBox){
@@ -150,7 +165,7 @@ class WordPanelState extends State<WordPanel> {
   void initState() {
     super.initState();
 
-    _moveBox   = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.move     , onBuild: widget.onDragBoxBuild);
+    _moveBox   = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.move     , onBuild: widget.onDragBoxBuild, label: ValueProxy(''),);
     _editPos   = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.editPos  , onBuild: widget.onDragBoxBuild);
     _insertPos = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.insertPos, onBuild: widget.onDragBoxBuild);
 
@@ -162,6 +177,7 @@ class WordPanelState extends State<WordPanel> {
     _sensRectList.clear();
 
     _boxInfoList.addAll(_splitText(text));
+    widget.controller.onChange?.call();
 
     _rebuildStrNeed = true;
   }
@@ -189,17 +205,24 @@ class WordPanelState extends State<WordPanel> {
 
     for (var word in wordList) {
       if (word.isNotEmpty) {
-        result.add(
-            DragBoxInfo(DragBox(
-                label   : word,
-                onBuild : widget.onDragBoxBuild,
-                key     : GlobalKey<DragBoxState>()
-            ))
-        );
+        result.add(_createNewWord(word));
       }
     }
 
     return result;
+  }
+
+  DragBoxInfo _createNewWord(String word){
+    final label = ValueProxy(word);
+
+    return DragBoxInfo(
+      DragBox(
+        label   : label,
+        onBuild : widget.onDragBoxBuild,
+        key     : GlobalKey<DragBoxState>()
+      ),
+      label,
+    );
   }
 
   _rebuildStr(double width){
@@ -292,7 +315,7 @@ class WordPanelState extends State<WordPanel> {
     String ret = '';
 
     for (var i = 0; i < _boxInfoList.length; i++) {
-      final label = dragBoxKey(_boxInfoList[i].boxWidget).currentState!.label;
+      final label = _boxInfoList[i].label.value;
 
       if (ret.isEmpty) {
         ret = label;
@@ -305,7 +328,7 @@ class WordPanelState extends State<WordPanel> {
   }
 
   String _getWord(int pos){
-    return dragBoxKey(_boxInfoList[pos].boxWidget).currentState!.label;
+    return _boxInfoList[pos].label.value;
   }
 
   void _deleteWord(int fromPos, [int count = 1]){
@@ -314,11 +337,19 @@ class WordPanelState extends State<WordPanel> {
         _boxInfoList.removeAt(fromPos);
       }
     }
+    widget.controller.onChange?.call();
     _buildBoxesString(_width);
   }
 
   void _insertText(int pos, String text){
     _boxInfoList.insertAll(pos, _splitText(text));
+    widget.controller.onChange?.call();
+    _rebuildStrNeed = true;
+  }
+
+  void _insertWord(int pos, String word) {
+    _boxInfoList.insert(pos, _createNewWord(word));
+    widget.controller.onChange?.call();
     _rebuildStrNeed = true;
   }
 
@@ -433,7 +464,7 @@ class WordPanelState extends State<WordPanel> {
       final moveBoxKey = _moveBox.key as GlobalKey<DragBoxState>;
 
       moveBoxKey.currentState!.setState((){
-        moveBoxKey.currentState!.label = dragBoxKey(boxInfo.boxWidget).currentState!.label;
+        _moveBox.label!.value = boxInfo.label.value;
         moveBoxKey.currentState!.visible = false;
       });
     }
@@ -503,7 +534,7 @@ class WordPanelState extends State<WordPanel> {
 
     final moveBoxKey = dragBoxKey(_moveBox);
     moveBoxKey.currentState!.setState(() {
-      moveBoxKey.currentState!.label = '';
+      _moveBox.label!.value = '';
       moveBoxKey.currentState!.visible = false;
       moveBoxKey.currentState!.position = const Offset(0,0);
     });
@@ -531,6 +562,8 @@ class WordPanelState extends State<WordPanel> {
           insertIndex -= 1;
         }
         _boxInfoList.insert(insertIndex, boxInfo);
+
+        widget.controller.onChange?.call();
 
         _buildBoxesString(_width);
       }
@@ -592,9 +625,9 @@ class WordPanelState extends State<WordPanel> {
     }
 
     if (widget.onDragBoxTap != null){
-      final newLabel = await widget.onDragBoxTap!.call(boxState.label, boxState.position);
+      final newLabel = await widget.onDragBoxTap!.call(boxInfo.label.value, boxState.position);
       if (newLabel != null ) {
-        boxState.label = newLabel;
+        boxInfo.label.value = newLabel;
       }
     }
 
@@ -611,11 +644,11 @@ class WordPanelState extends State<WordPanel> {
     final boxState = boxKey.currentState;
     if (boxState == null)  return;
 
-    final newLabel = await onDragTap.call(boxState.label, boxState.position);
-    if (newLabel == null || boxState.label == newLabel) return;
+    final newLabel = await onDragTap.call(boxInfo.label.value, boxState.position);
+    if (newLabel == null || boxInfo.label.value == newLabel) return;
 
     boxState.setState((){
-      boxState.label = newLabel;
+      boxInfo.label.value = newLabel;
     });
 
     _rebuildStrNeed = true;
@@ -636,11 +669,11 @@ typedef DragBoxBuilder = Widget Function(BuildContext context, String label, Dra
 typedef DragBoxTap = Future<String?> Function(String label, Offset position);
 
 class DragBox extends StatefulWidget {
-  final String label;
+  final ValueProxy? label;
   final DragBoxSpec spec;
   final DragBoxBuilder onBuild;
 
-  const DragBox({this.label = '', this.spec = DragBoxSpec.none, required this.onBuild, Key? key})  : super(key: key);
+  const DragBox({this.label, this.spec = DragBoxSpec.none, required this.onBuild, Key? key})  : super(key: key);
 
   @override
   State<DragBox> createState() => DragBoxState();
@@ -648,7 +681,6 @@ class DragBox extends StatefulWidget {
 
 class DragBoxState extends State<DragBox> {
   Offset position  = const Offset(0.0, 0.0);
-  String label     = '';
   DragBoxSpec spec = DragBoxSpec.none;
   bool   visible   = true;
 
@@ -656,7 +688,6 @@ class DragBoxState extends State<DragBox> {
   void initState() {
     super.initState();
 
-    label = widget.label;
     spec  = widget.spec;
 
     if (spec == DragBoxSpec.move) {
@@ -673,6 +704,9 @@ class DragBoxState extends State<DragBox> {
           child: Container()
       );
     }
+
+    String label = '';
+    if (widget.label != null) label = widget.label!.value;
 
     return Positioned(
         left  : position.dx,

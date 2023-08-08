@@ -91,13 +91,26 @@ class _MyHomePageState extends State<MyHomePage> {
   };
 
   final _historyList = <String>[];
+  bool _historyRecordOn = true;
+  int _historyPos = -1;
 
   @override
   void initState() {
     super.initState();
 
     _textConstructor = TextConstructor.fromMap(jsonDecode(textConstructorJson));
-    _controller = WordPanelController(text: _textConstructor.text);
+    _controller = WordPanelController(text: _textConstructor.text, onChange: _onChange);
+  }
+
+  void _onChange() {
+    if (!_historyRecordOn) return;
+
+    if (_historyPos >= 0) {
+      _historyList.removeRange(_historyPos, _historyList.length - 1);
+      _historyPos = -1;
+    }
+
+    _historyList.add(_controller.text);
   }
 
   @override
@@ -133,12 +146,27 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
 
                   IconButton(
-                    onPressed: (){},
+                    onPressed: (_historyPos == 1 || _historyList.length == 1) ? null : (){
+                      if (_historyPos < 0) {
+                        _historyPos = _historyList.length - 1;
+                      } else {
+                        _historyPos --;
+                      }
+
+                      _historyRecordOn = false;
+                      _controller.text = _historyList[_historyPos];
+                      _historyRecordOn = true;
+                    },
                     icon: const Icon(Icons.undo_outlined),
                   ),
 
                   IconButton(
-                    onPressed: (){},
+                    onPressed: (_historyPos < 0 || _historyPos == (_historyList.length - 1) ) ? null : (){
+                      _historyPos ++;
+                      _historyRecordOn = false;
+                      _controller.text = _historyList[_historyPos];
+                      _historyRecordOn = true;
+                    },
                     icon: const Icon(Icons.redo_outlined),
                   ),
 
@@ -475,7 +503,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<bool?> onBasementBoxTap(String label, Offset position) async {
     final curPos = _controller.getCursorPos();
-    _controller.insertText(curPos, label);
+    _controller.insertWord(curPos, label);
     _controller.refreshPanel();
     return false;
   }
