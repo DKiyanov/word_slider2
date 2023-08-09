@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:word_slider2/word_grid.dart';
 import 'package:word_slider2/word_panel.dart';
 import 'package:word_slider2/word_panel_model.dart';
+import 'package:simple_events/simple_events.dart';
 
 void main() => runApp(const MyApp());
+
+String _txtDialogInputText = 'Введите текст';
 
 const String textConstructorJson = '''
 {
@@ -94,6 +97,8 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _historyRecordOn = true;
   int _historyPos = -1;
 
+  final _toolBarRefresh = SimpleEvent();
+
   @override
   void initState() {
     super.initState();
@@ -106,11 +111,12 @@ class _MyHomePageState extends State<MyHomePage> {
     if (!_historyRecordOn) return;
 
     if (_historyPos >= 0) {
-      _historyList.removeRange(_historyPos, _historyList.length - 1);
+      _historyList.removeRange(_historyPos + 1, _historyList.length);
       _historyPos = -1;
     }
 
     _historyList.add(_controller.text);
+    _toolBarRefresh.send();
   }
 
   @override
@@ -134,71 +140,96 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
 
-            BottomAppBar(
-              color: Colors.blue,
-              child: IconTheme(
-                data: IconThemeData(color: Theme.of(context).colorScheme.onPrimary),
-                child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            EventReceiverWidget(
+              events: [_toolBarRefresh],
+              builder: (BuildContext context) {
+                return BottomAppBar(
+                    color: Colors.blue,
+                    child: IconTheme(
+                      data: IconThemeData(color: Theme.of(context).colorScheme.onPrimary),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
 
-                  IconButton(
-                    onPressed: (){},
-                    icon: const Icon(Icons.keyboard_alt_outlined),
-                  ),
+                        IconButton(
+                          onPressed: () async {
+                            final word = await wordInputDialog(context);
+                            if (word.isEmpty) return;
 
-                  IconButton(
-                    onPressed: (_historyPos == 1 || _historyList.length == 1) ? null : (){
-                      if (_historyPos < 0) {
-                        _historyPos = _historyList.length - 1;
-                      } else {
-                        _historyPos --;
-                      }
+                            final pos = _controller.getCursorPos();
+                            _controller.insertWord(pos, word);
+                            _controller.refreshPanel();
+                          },
+                          icon: const Icon(Icons.keyboard_alt_outlined),
+                        ),
 
-                      _historyRecordOn = false;
-                      _controller.text = _historyList[_historyPos];
-                      _historyRecordOn = true;
-                    },
-                    icon: const Icon(Icons.undo_outlined),
-                  ),
 
-                  IconButton(
-                    onPressed: (_historyPos < 0 || _historyPos == (_historyList.length - 1) ) ? null : (){
-                      _historyPos ++;
-                      _historyRecordOn = false;
-                      _controller.text = _historyList[_historyPos];
-                      _historyRecordOn = true;
-                    },
-                    icon: const Icon(Icons.redo_outlined),
-                  ),
+                        IconButton(
+                          onPressed: (_historyPos == 0 || _historyList.length == 1) ? null : (){
+                            if (_historyPos < 0) {
+                              _historyPos = _historyList.length - 2;
+                            } else {
+                              _historyPos --;
+                            }
 
-                  IconButton(
-                    onPressed: (){
-                      final pos = _controller.getCursorPos() - 1;
-                      if (pos < 0) return;
-                      _controller.deleteWord(pos);
-                      _controller.refreshPanel();
-                      _controller.setCursorPos(pos);
-                    },
-                    icon: const Icon(Icons.backspace_outlined),
-                  ),
+                            _historyRecordOn = false;
+                            _controller.text = _historyList[_historyPos];
+                            _historyRecordOn = true;
 
-                  IconButton(
-                      onPressed: (){
-                        final pos = _controller.getCursorPos();
-                        _controller.deleteWord(pos);
-                        _controller.refreshPanel();
-                        _controller.setCursorPos(pos);
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                  ),
+                            _toolBarRefresh.send();
+                          },
+                          icon: const Icon(Icons.undo_outlined),
+                        ),
 
-                  IconButton(
-                    onPressed: (){
-                      _controller.text = '';
-                    },
-                    icon: const Icon(Icons.clear_outlined),
-                  ),
-                ]),
-              )
+                        IconButton(
+                          onPressed: (_historyPos < 0 || _historyPos == (_historyList.length - 1) ) ? null : (){
+                            _historyPos ++;
+                            _historyRecordOn = false;
+                            _controller.text = _historyList[_historyPos];
+                            _historyRecordOn = true;
+
+                            _toolBarRefresh.send();
+                          },
+                          icon: const Icon(Icons.redo_outlined),
+                        ),
+
+                        IconButton(
+                          onPressed: (){
+                            final pos = _controller.getCursorPos() - 1;
+                            if (pos < 0) return;
+                            _controller.deleteWord(pos);
+                            _controller.refreshPanel();
+                            _controller.setCursorPos(pos);
+                          },
+                          icon: const Icon(Icons.backspace_outlined),
+                        ),
+
+                        IconButton(
+                          onPressed: (){
+                            final pos = _controller.getCursorPos();
+                            _controller.deleteWord(pos);
+                            _controller.refreshPanel();
+                            _controller.setCursorPos(pos);
+                          },
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+
+                        IconButton(
+                          onPressed: (){
+                            _controller.text = '';
+                          },
+                          icon: const Icon(Icons.clear_outlined),
+                        ),
+
+                        IconButton(
+                          onPressed: (){
+
+                          },
+                          icon: const Icon(Icons.check, color: Colors.lightGreenAccent),
+                        ),
+
+                      ]),
+                    )
+                );
+              }
             ),
 
             Expanded(
@@ -419,7 +450,7 @@ class _MyHomePageState extends State<MyHomePage> {
       borderWidth = _focusBorderWidth;
     }
 
-    final widget = Container(
+    final retWidget = Container(
       color: backgroundColor,
       child: Text(
         outStr,
@@ -438,20 +469,28 @@ class _MyHomePageState extends State<MyHomePage> {
     );
 
     if (forPopup) {
-      return  Container(
-        padding: const EdgeInsets.only(left: 10, right: 10),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: _borderColor,
-            width: _borderWidth,
-          ),
-          borderRadius: const BorderRadius.all(Radius.circular(20)),
-          color: backgroundColor,
-        ),
-        child: widget,
+      return makeDecoration(
+        child           : retWidget,
+        borderColor     : _borderColor,
+        borderWidth     : _borderWidth,
+        backgroundColor : backgroundColor,
       );
     }
 
+    return makeDecoration(
+      child           : retWidget,
+      borderColor     : borderColor,
+      borderWidth     : borderWidth,
+      backgroundColor : backgroundColor,
+    );
+  }
+
+  Widget makeDecoration({
+    required Widget child,
+    required Color  borderColor,
+    required double borderWidth,
+    required Color  backgroundColor,
+  }){
     return  Container(
       padding: const EdgeInsets.only(left: 10, right: 10),
       decoration: BoxDecoration(
@@ -462,9 +501,11 @@ class _MyHomePageState extends State<MyHomePage> {
         borderRadius: const BorderRadius.all(Radius.circular(20)),
         color: backgroundColor,
       ),
-      child: widget,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        child: child
+      ),
     );
-
   }
 
   Future<String?> showPopupMenu(String label, Offset position) async {
@@ -507,4 +548,39 @@ class _MyHomePageState extends State<MyHomePage> {
     _controller.refreshPanel();
     return false;
   }
+
+  Future<String> wordInputDialog(BuildContext context) async {
+    final textController = TextEditingController();
+    String  word = '';
+
+    final result = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text(_txtDialogInputText),
+            content: TextField(
+              onChanged: (value) {
+                word = value;
+              },
+              controller: textController,
+            ),
+            actions: <Widget>[
+              IconButton(icon: const Icon(Icons.cancel_outlined, color: Colors.deepOrangeAccent), onPressed: (){
+                word = '';
+                Navigator.pop(context, false);
+              }),
+
+              IconButton(icon: const Icon(Icons.check, color: Colors.lightGreen), onPressed: () {
+                Navigator.pop(context, true);
+              }),
+
+            ],
+          );
+        });
+
+    if (result != null && result) return word;
+
+    return '';
+  }
+
 }

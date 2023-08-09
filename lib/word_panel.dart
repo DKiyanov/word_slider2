@@ -103,7 +103,7 @@ class DragBoxInfo{
   final DragBox boxWidget;
   final ValueProxy label;
   Rect rect = Rect.zero;
-  DragBoxInfo(this.boxWidget, this.label);
+  DragBoxInfo({required this.boxWidget, required this.label});
 }
 
 GlobalKey<DragBoxState> dragBoxKey(DragBox dragBox){
@@ -216,12 +216,13 @@ class WordPanelState extends State<WordPanel> {
     final label = ValueProxy(word);
 
     return DragBoxInfo(
-      DragBox(
+      boxWidget : DragBox(
         label   : label,
         onBuild : widget.onDragBoxBuild,
         key     : GlobalKey<DragBoxState>()
       ),
-      label,
+
+      label : label,
     );
   }
 
