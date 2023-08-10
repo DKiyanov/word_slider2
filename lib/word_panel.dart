@@ -305,9 +305,14 @@ class WordPanelState extends State<WordPanel> {
     final dy = firstBox.rect.height / 2;
     final sensHeight = firstBox.rect.height + widget.lineSpacing;
 
-    _sensRectList.add(Rect.fromCenter(center: Offset(firstBox.rect.left, firstBox.rect.top + dy), width: widget.sensWidth, height: sensHeight ));
+    double prevTop = -1.0;
 
     for (var boxInfo in _boxInfoList) {
+      if (prevTop != boxInfo.rect.top) {
+        _sensRectList.add(Rect.fromCenter(center: Offset(boxInfo.rect.left, boxInfo.rect.top + dy), width: widget.sensWidth, height: sensHeight ));
+        prevTop = boxInfo.rect.top;
+      }
+
       _sensRectList.add(Rect.fromCenter(center: Offset(boxInfo.rect.right, boxInfo.rect.top + dy), width: widget.sensWidth, height: sensHeight ));
     }
   }
@@ -482,41 +487,54 @@ class WordPanelState extends State<WordPanel> {
     final moveBoxSize = _getDragBoxRenderBox(_moveBox).size;
     final moveBoxCenter = Offset(moveBoxPosition.dx + moveBoxSize.width / 2, moveBoxPosition.dy + moveBoxSize.height / 2);
 
+    bool insertPosVisible = false;
+
     final sensRect = _sensRectList.firstWhereOrNull ((rect)=>rect.contains(moveBoxCenter));
     final bool insertPosNeed = (sensRect != null);
 
-    if (_insertPosVisible != insertPosNeed ) {
-      moveBoxKey.currentState!.setState((){
-        moveBoxKey.currentState!.spec = insertPosNeed ? DragBoxSpec.canDrop : DragBoxSpec.move;
-      });
+    if (insertPosNeed) {
+      int insertIndex = 0;
+      int selIndex = 0;
 
-      if ( insertPosNeed ){
-        HapticFeedback.heavyImpact();
+      for (var i = 0; i < _boxInfoList.length; i++) {
+        final boxInfo = _boxInfoList[i];
+        if (boxInfo == _selectedBoxInfo){
+          selIndex = i;
+          break;
+        }
       }
 
-      _insertPosVisible = insertPosNeed;
+      for (var i = 0; i < _boxInfoList.length; i++) {
+        final boxInfo = _boxInfoList[i];
+        if (boxInfo.rect.top < sensRect.center.dy && boxInfo.rect.bottom > sensRect.center.dy){
+          if (sensRect.contains(boxInfo.rect.centerLeft)) {
+            insertIndex = i;
+            break;
+          }
+          if (sensRect.contains(boxInfo.rect.centerRight)) {
+            insertIndex = i + 1;
+            break;
+          }
+        }
+      }
+
+      if (insertIndex != selIndex && insertIndex != (selIndex + 1)){
+        insertPosVisible = true;
+      }
+    }
+
+    if (_insertPosVisible != insertPosVisible) {
+      _insertPosVisible = insertPosVisible;
 
       final insertPosState = dragBoxKey(_insertPos).currentState;
-      if (insertPosNeed) {
-        int insertIndex = 0;
-        int selIndex = 0;
-        for (var i = 0; i < _boxInfoList.length; i++) {
-          final boxInfo = _boxInfoList[i];
-          if (boxInfo == _selectedBoxInfo){
-            selIndex = i;
-          }
-          if (boxInfo.rect.top < sensRect.center.dy && boxInfo.rect.bottom > sensRect.center.dy && boxInfo.rect.left < sensRect.center.dx){
-            insertIndex = i;
-          }
-        }
-        insertIndex += 1;
 
-        if (insertIndex != selIndex && insertIndex != (selIndex + 1)){
-          insertPosState!.setState((){
-            insertPosState.position = Offset(sensRect.center.dx - _insertPosWidth / 2, sensRect.center.dy - wordBoxHeight / 2);
-            insertPosState.visible = true;
-          });
-        }
+      if (insertPosVisible) {
+        HapticFeedback.heavyImpact();
+
+        insertPosState!.setState((){
+          insertPosState.position = Offset(sensRect!.center.dx - _insertPosWidth / 2, sensRect.center.dy - wordBoxHeight / 2);
+          insertPosState.visible = true;
+        });
       } else {
         insertPosState!.setState((){
           insertPosState.visible = false;
@@ -524,9 +542,11 @@ class WordPanelState extends State<WordPanel> {
       }
     }
 
-    moveBoxKey.currentState!.setState(() {
-      moveBoxKey.currentState!.position = moveBoxPosition;
-      moveBoxKey.currentState!.visible = true;
+    final moveBoxState = moveBoxKey.currentState!;
+    moveBoxState.setState(() {
+      moveBoxState.spec     = insertPosVisible ? DragBoxSpec.canDrop : DragBoxSpec.move;
+      moveBoxState.position = moveBoxPosition;
+      moveBoxState.visible  = true;
     });
   }
 
@@ -543,18 +563,29 @@ class WordPanelState extends State<WordPanel> {
     final insertPosState = dragBoxKey(_insertPos).currentState;
     if (insertPosState!.visible) {
       final insertPosCenter = Offset(insertPosState.position.dx + _insertPosWidth / 2, insertPosState.position.dy + wordBoxHeight/ 2);
+      final sensRect = _sensRectList.firstWhere((rect)=>rect.contains(insertPosCenter));
       int insertIndex = 0;
       int selIndex = 0;
+
       for (var i = 0; i < _boxInfoList.length; i++) {
         final boxInfo = _boxInfoList[i];
         if (boxInfo == _selectedBoxInfo){
           selIndex = i;
         }
-        if (boxInfo.rect.top < insertPosCenter.dy && boxInfo.rect.bottom > insertPosCenter.dy && boxInfo.rect.left < insertPosCenter.dx){
+      }
+
+      for (var i = 0; i < _boxInfoList.length; i++) {
+        final boxInfo = _boxInfoList[i];
+
+        if (sensRect.contains(boxInfo.rect.centerLeft)) {
           insertIndex = i;
+          break;
+        }
+        if (sensRect.contains(boxInfo.rect.centerRight)) {
+          insertIndex = i + 1;
+          break;
         }
       }
-      insertIndex += 1;
 
       if (selIndex != insertIndex){
         final boxInfo = _boxInfoList[selIndex];
