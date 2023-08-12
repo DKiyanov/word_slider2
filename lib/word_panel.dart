@@ -2,12 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:collection/collection.dart';
 
-class WordPanelController{
+class WordPanelController {
   WordPanelState? _panelState;
 
-  VoidCallback? onChange;
+  final VoidCallback? onChange;
 
-  WordPanelController({String text = '', this.onChange}){
+  final bool canMoveWord;
+  final bool noCursor;
+  final bool focusAsCursor;
+
+  WordPanelController({
+    String text = '',
+    this.onChange,
+    this.canMoveWord   = true,
+    this.noCursor      = false,
+    this.focusAsCursor = true
+  }){
     _text = text;
   }
 
@@ -23,7 +33,7 @@ class WordPanelController{
     if (_panelState == null) return 0;
     if (!_panelState!.mounted) return 0;
 
-    return _panelState!.wordBoxHeight;
+    return _panelState!._wordBoxHeight;
   }
 
   String getWord(int pos) {
@@ -41,11 +51,34 @@ class WordPanelController{
     return _text;
   }
 
-  int getCursorPos() {
+  int getCursorPos({bool onlyCursor = false, bool lastPostIfNot = false}) {
     if (_panelState == null) return -1;
     if (!_panelState!.mounted) return -1;
 
-    return _panelState!._getCursorPos();
+    final pos = _panelState!._getCursorPos();
+    if (pos >=0) return pos;
+
+    if (onlyCursor) {
+      if (lastPostIfNot) {
+        return _panelState!._boxInfoList.length;
+      } else {
+        return pos;
+      }
+    }
+
+    if (focusAsCursor) {
+      final pos = getFocusPos();
+
+      if (pos >=0) return pos;
+
+      if (lastPostIfNot) {
+        return _panelState!._boxInfoList.length;
+      } else {
+        return pos;
+      }
+    }
+
+    return pos;
   }
 
   void setCursorPos(int pos) {
@@ -53,6 +86,34 @@ class WordPanelController{
     if (!_panelState!.mounted) return;
 
     return _panelState!._setCursorPos(pos);
+  }
+
+  void hideCursor() {
+    if (_panelState == null) return;
+    if (!_panelState!.mounted) return;
+
+    return _panelState!._hideCursor();
+  }
+
+  int getFocusPos() {
+    if (_panelState == null) return -1;
+    if (!_panelState!.mounted) return -1;
+
+    return _panelState!._getFocusPos();
+  }
+
+  void setFocusPos(int pos) {
+    if (_panelState == null) return;
+    if (!_panelState!.mounted) return;
+
+    return _panelState!._setFocusPos(pos);
+  }
+
+  void hideFocus() {
+    if (_panelState == null) return;
+    if (!_panelState!.mounted) return;
+
+    return _panelState!._hideFocus();
   }
 
   void _setText(String text) {
@@ -110,12 +171,15 @@ GlobalKey<DragBoxState> dragBoxKey(DragBox dragBox){
   return dragBox.key as GlobalKey<DragBoxState>;
 }
 
-class WordPanel extends StatefulWidget{
+typedef OnChangeHeight = void Function(double newHeight);
+
+class WordPanel extends StatefulWidget {
   final WordPanelController controller;
   final DragBoxBuilder      onDragBoxBuild;
   final DragBoxTap?         onDragBoxTap;
   final DragBoxTap?         onDragBoxLongPress;
   final DragBoxTap?         onDoubleTap;
+  final OnChangeHeight?     onChangeHeight;
   final double              sensWidth;   // the width of the sensitive zone at the ends of words, used when dragging and taping
   final double              lineSpacing; // line spacing
 
@@ -125,6 +189,7 @@ class WordPanel extends StatefulWidget{
     this.onDragBoxTap,
     this.onDragBoxLongPress,
     this.onDoubleTap,
+    this.onChangeHeight,
     this.sensWidth   = 20,
     this.lineSpacing = 5,
     Key? key
@@ -157,7 +222,7 @@ class WordPanelState extends State<WordPanel> {
   double _editPosWidth   = 0.0;
   double _insertPosWidth = 0.0;
 
-  double wordBoxHeight = 0;
+  double _wordBoxHeight = 0;
 
   bool _starting = true;
 
@@ -189,7 +254,7 @@ class WordPanelState extends State<WordPanel> {
 
     final wordList = <String>[];
 
-    final subStrList = text.split('"');
+    final subStrList = text.split("'");
 
     bool solid = false;
 
@@ -239,11 +304,21 @@ class WordPanelState extends State<WordPanel> {
       _rebuildStrNeed = false;
       _buildBoxesString(width);
 
-      _editPosWidth   = _getDragBoxRenderBox(_editPos).size.width;
-      _insertPosWidth = _getDragBoxRenderBox(_insertPos).size.width;
+      if (_editPosWidth == 0.0) {
+        _editPosWidth   = _getDragBoxRenderBox(_editPos).size.width;
+      }
+      if (_insertPosWidth == 0.0) {
+        _insertPosWidth = _getDragBoxRenderBox(_insertPos).size.width;
+      }
 
-      dragBoxKey(_insertPos).currentState!.setState((){
-        dragBoxKey(_insertPos).currentState!.visible = false;
+      final insertPosState = dragBoxKey(_insertPos).currentState!;
+      insertPosState.setState((){
+        insertPosState.visible = false;
+      });
+
+      final editPosState = dragBoxKey(_editPos).currentState!;
+      editPosState.setState((){
+        editPosState.visible = false;
       });
     }
   }
@@ -257,7 +332,8 @@ class WordPanelState extends State<WordPanel> {
   }
 
   void _buildBoxesString(double width){
-    wordBoxHeight = 0;
+    final prevHeight = _height;
+    _wordBoxHeight = 0;
 
     var position = const Offset(0,0);
     Offset nextPosition;
@@ -268,16 +344,16 @@ class WordPanelState extends State<WordPanel> {
 
       final renderBox = boxKey.currentContext!.findRenderObject() as RenderBox;
 
-      if (wordBoxHeight == 0.0) {
-        wordBoxHeight = renderBox.size.height;
-        _height = wordBoxHeight;
+      if (_wordBoxHeight == 0.0) {
+        _wordBoxHeight = renderBox.size.height;
+        _height = _wordBoxHeight;
       }
 
       nextPosition = Offset(position.dx + renderBox.size.width, position.dy);
       if (nextPosition.dx >= width){
-        position = Offset(0, position.dy + wordBoxHeight + widget.lineSpacing);
+        position = Offset(0, position.dy + _wordBoxHeight + widget.lineSpacing);
         nextPosition = Offset(position.dx + renderBox.size.width, position.dy);
-        _height = position.dy + wordBoxHeight;
+        _height = position.dy + _wordBoxHeight;
       }
 
       boxKey.currentState!.setState((){
@@ -288,10 +364,10 @@ class WordPanelState extends State<WordPanel> {
       position = nextPosition;
     }
 
-    final editPosState = dragBoxKey(_editPos).currentState;
-    editPosState!.setState((){
-      editPosState.position = position;
-    });
+    if (prevHeight != _height) {
+      _starting = true;
+      widget.onChangeHeight?.call(_height);
+    }
 
     _fillSensRectList();
   }
@@ -359,9 +435,65 @@ class WordPanelState extends State<WordPanel> {
     _rebuildStrNeed = true;
   }
 
+  int _getFocusPos() {
+    if (_focusBoxKey == null) return -1;
+
+    final focusRenderBox = _focusBoxKey!.currentContext?.findRenderObject() as RenderBox?;
+    if (focusRenderBox == null) return -1;
+
+    final focusState = _focusBoxKey!.currentState;
+    if (focusState == null) return -1;
+
+    final focusCenter = Offset(focusState.position.dx + focusRenderBox.size.width / 2, focusState.position.dy + focusRenderBox.size.height / 2);
+    final boxInfo = getBoxAtPos(localPosition : focusCenter, tapOnSensRect : false);
+    if (boxInfo == null) return -1;
+
+    final pos = _boxInfoList.indexOf(boxInfo);
+
+    return pos;
+  }
+
+  void _setFocusPos(int pos) {
+    if (pos < 0 || pos >= _boxInfoList.length) return;
+
+    final boxInfo = _boxInfoList[pos];
+    final boxKey = dragBoxKey(boxInfo.boxWidget);
+
+    if (boxKey == _focusBoxKey) return;
+
+    final boxState = boxKey.currentState;
+    if (boxState == null) return;
+
+    if (_focusBoxKey != null) {
+      final focusBoxState = _focusBoxKey!.currentState;
+      if (focusBoxState != null) {
+        focusBoxState.setState(() {
+          focusBoxState.spec = DragBoxSpec.none;
+        });
+      }
+    }
+
+    boxState.setState(() {
+      boxState.spec = DragBoxSpec.focus;
+    });
+  }
+
+  void _hideFocus() {
+    if (_focusBoxKey == null) return;
+    final focusState = _focusBoxKey!.currentState;
+    if (focusState == null) return;
+
+    focusState.setState(() {
+      focusState.spec = DragBoxSpec.none;
+    });
+  }
+
   int _getCursorPos(){
     final editPosState = dragBoxKey(_editPos).currentState;
-    final editPosCenter = Offset(editPosState!.position.dx + _editPosWidth / 2, editPosState.position.dy + wordBoxHeight/ 2);
+    if (editPosState == null) return -1;
+    if (!editPosState.visible) return -1;
+
+    final editPosCenter = Offset(editPosState.position.dx + _editPosWidth / 2, editPosState.position.dy + _wordBoxHeight/ 2);
 
     for (var i = 0; i < _boxInfoList.length; i++) {
       final boxInfo = _boxInfoList[i];
@@ -376,10 +508,11 @@ class WordPanelState extends State<WordPanel> {
   }
 
   void _setCursorPos(int pos) {
-    final editPosState = dragBoxKey(_editPos).currentState;
+    final editPosState = dragBoxKey(_editPos).currentState!;
 
     if (_boxInfoList.isEmpty) {
-      editPosState!.setState((){
+      editPosState.setState((){
+        editPosState.visible = true;
         editPosState.position = Offset(_editPosWidth / 2, 0);
       });
       return;
@@ -387,8 +520,9 @@ class WordPanelState extends State<WordPanel> {
 
     if (pos >= _boxInfoList.length) {
       final boxInfo = _boxInfoList.last;
-      editPosState!.setState((){
-        editPosState.position = Offset(boxInfo.rect.right - _editPosWidth / 2, boxInfo.rect.center.dy - wordBoxHeight / 2);
+      editPosState.setState((){
+        editPosState.visible = true;
+        editPosState.position = Offset(boxInfo.rect.right - _editPosWidth / 2, boxInfo.rect.center.dy - _wordBoxHeight / 2);
       });
       return;
     }
@@ -396,10 +530,18 @@ class WordPanelState extends State<WordPanel> {
     if (pos < 0) pos = 0;
     final boxInfo = _boxInfoList[pos];
 
-    editPosState!.setState((){
-      editPosState.position = Offset(boxInfo.rect.left - _editPosWidth / 2, boxInfo.rect.center.dy - wordBoxHeight / 2);
+    editPosState.setState((){
+      editPosState.visible = true;
+      editPosState.position = Offset(boxInfo.rect.left - _editPosWidth / 2, boxInfo.rect.center.dy - _wordBoxHeight / 2);
     });
 
+  }
+
+  void _hideCursor() {
+    final editPosState = dragBoxKey(_editPos).currentState!;
+    editPosState.setState((){
+      editPosState.visible = false;
+    });
   }
 
   void _refresh() {
@@ -460,6 +602,8 @@ class WordPanelState extends State<WordPanel> {
   }
 
   void _onPanStart(DragStartDetails details) {
+    if (!widget.controller.canMoveWord) return;
+
     final renderBox = _getStackRenderBox();
     final position = renderBox.globalToLocal(details.globalPosition);
 
@@ -532,7 +676,7 @@ class WordPanelState extends State<WordPanel> {
         HapticFeedback.heavyImpact();
 
         insertPosState!.setState((){
-          insertPosState.position = Offset(sensRect!.center.dx - _insertPosWidth / 2, sensRect.center.dy - wordBoxHeight / 2);
+          insertPosState.position = Offset(sensRect!.center.dx - _insertPosWidth / 2, sensRect.center.dy - _wordBoxHeight / 2);
           insertPosState.visible = true;
         });
       } else {
@@ -562,7 +706,7 @@ class WordPanelState extends State<WordPanel> {
 
     final insertPosState = dragBoxKey(_insertPos).currentState;
     if (insertPosState!.visible) {
-      final insertPosCenter = Offset(insertPosState.position.dx + _insertPosWidth / 2, insertPosState.position.dy + wordBoxHeight/ 2);
+      final insertPosCenter = Offset(insertPosState.position.dx + _insertPosWidth / 2, insertPosState.position.dy + _wordBoxHeight/ 2);
       final sensRect = _sensRectList.firstWhere((rect)=>rect.contains(insertPosCenter));
       int insertIndex = 0;
       int selIndex = 0;
@@ -588,6 +732,18 @@ class WordPanelState extends State<WordPanel> {
       }
 
       if (selIndex != insertIndex){
+        final pos = _getCursorPos();
+        DragBoxInfo? cursorBoxInfo;
+        int posAdd = 0;
+        if (pos >= 0) {
+          if (pos >= _boxInfoList.length) {
+            posAdd = 1;
+            cursorBoxInfo = _boxInfoList[_boxInfoList.length - 1];
+          } else {
+            cursorBoxInfo = _boxInfoList[pos];
+          }
+        }
+
         final boxInfo = _boxInfoList[selIndex];
         _boxInfoList.removeAt(selIndex);
         if (selIndex < insertIndex){
@@ -598,6 +754,14 @@ class WordPanelState extends State<WordPanel> {
         widget.controller.onChange?.call();
 
         _buildBoxesString(_width);
+        if (_starting) {
+          setState(() {});
+        }
+
+        if (cursorBoxInfo != null) {
+          final pos = _boxInfoList.indexOf(cursorBoxInfo) + posAdd;
+          _setCursorPos(pos);
+        }
       }
 
       insertPosState.setState((){
@@ -609,25 +773,34 @@ class WordPanelState extends State<WordPanel> {
     _selectedBoxInfo = null;
   }
 
-  DragBoxInfo? getBoxAtPos(Offset globalPosition) {
-    final renderBox = _getStackRenderBox();
-    final position = renderBox.globalToLocal(globalPosition);
+  DragBoxInfo? getBoxAtPos({Offset? globalPosition, Offset? localPosition, bool tapOnSensRect = true}) {
+    var position = localPosition;
 
-    final sensRect = _sensRectList.firstWhereOrNull((rect)=>rect.contains(position));
-    if (sensRect != null){
-      final editPosState = dragBoxKey(_editPos).currentState;
-      editPosState!.setState((){
-        editPosState.position = Offset(sensRect.center.dx - _editPosWidth / 2, sensRect.center.dy - wordBoxHeight / 2);
-      });
-      return null;
+    if (position == null && globalPosition != null) {
+      final renderBox = _getStackRenderBox();
+      position = renderBox.globalToLocal(globalPosition);
     }
 
-    final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo)=>boxInfo.rect.contains(position));
+    if (position == null) return null;
+
+    if (!widget.controller.noCursor && tapOnSensRect) {
+      final sensRect = _sensRectList.firstWhereOrNull((rect)=>rect.contains(position!));
+      if (sensRect != null){
+        final editPosState = dragBoxKey(_editPos).currentState!;
+        editPosState.setState((){
+          editPosState.visible = true;
+          editPosState.position = Offset(sensRect.center.dx - _editPosWidth / 2, sensRect.center.dy - _wordBoxHeight / 2);
+        });
+        return null;
+      }
+    }
+
+    final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo)=>boxInfo.rect.contains(position!));
     return boxInfo;
   }
 
   Future<void> _onTapUp(TapUpDetails details) async {
-    final boxInfo = getBoxAtPos(details.globalPosition);
+    final boxInfo = getBoxAtPos(globalPosition: details.globalPosition);
     if (boxInfo == null) return;
 
     final boxKey = dragBoxKey(boxInfo.boxWidget);
@@ -654,22 +827,37 @@ class WordPanelState extends State<WordPanel> {
     if (setFocus) {
       boxState.spec = DragBoxSpec.focus;
       _focusBoxKey = boxKey;
+
+      if (widget.controller.focusAsCursor) {
+        _hideCursor();
+      }
     }
+
+    bool labelChanged = false;
 
     if (widget.onDragBoxTap != null){
       final newLabel = await widget.onDragBoxTap!.call(boxInfo.label.value, boxState.position);
       if (newLabel != null ) {
-        boxInfo.label.value = newLabel;
+        if (boxInfo.label.value != newLabel) {
+          boxInfo.label.value = newLabel;
+          labelChanged = true;
+        }
       }
     }
 
     boxState.setState((){});
+
+    if (labelChanged) {
+      widget.controller.onChange?.call();
+      _rebuildStrNeed = true;
+      setState(() {});
+    }
   }
 
   Future<void> _tapProcess(DragBoxTap? onDragTap, Offset globalPosition) async {
     if (onDragTap == null) return;
 
-    final boxInfo = getBoxAtPos(globalPosition);
+    final boxInfo = getBoxAtPos(globalPosition : globalPosition);
     if (boxInfo == null) return;
 
     final boxKey = dragBoxKey(boxInfo.boxWidget);
@@ -682,6 +870,8 @@ class WordPanelState extends State<WordPanel> {
     boxState.setState((){
       boxInfo.label.value = newLabel;
     });
+
+    widget.controller.onChange?.call();
 
     _rebuildStrNeed = true;
     setState(() {});

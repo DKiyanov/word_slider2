@@ -13,13 +13,16 @@ GlobalKey<DrawBoxState> drawBoxKey(DrawBox drawBox){
   return drawBox.key as GlobalKey<DrawBoxState>;
 }
 
-class WordGrid extends StatefulWidget {
-  final String         text;
-  final DrawBoxBuilder onDrawBoxBuild;
-  final DrawBoxTap?    onDrawBoxTap;
-  final double         lineSpacing; // line spacing
+typedef OnChangeHeight = void Function(double newHeight);
 
-  const WordGrid({required this.text, required this.onDrawBoxBuild, this.onDrawBoxTap, this.lineSpacing = 5, Key? key}) : super(key: key);
+class WordGrid extends StatefulWidget {
+  final String          text;
+  final DrawBoxBuilder  onDrawBoxBuild;
+  final DrawBoxTap?     onDrawBoxTap;
+  final OnChangeHeight? onChangeHeight;
+  final double          lineSpacing; // line spacing
+
+  const WordGrid({required this.text, required this.onDrawBoxBuild, this.onDrawBoxTap, this.onChangeHeight, this.lineSpacing = 5, Key? key}) : super(key: key);
 
   @override
   State<WordGrid> createState() => _WordGridState();
@@ -78,7 +81,7 @@ class _WordGridState extends State<WordGrid> {
   void _addText(String str) {
     final wordList = <String>[];
 
-    final subStrList = str.split('"');
+    final subStrList = str.split("'");
 
     bool solid = false;
 
@@ -130,6 +133,7 @@ class _WordGridState extends State<WordGrid> {
       boxInfo.size = renderBox.size;
     }
 
+    final prevHeight = _height;
     _height = 0.0;
 
     if (!_boxInfoList.first.isGroup) {
@@ -148,6 +152,11 @@ class _WordGridState extends State<WordGrid> {
       _height += boxInfo.size.height;
 
       _putBoxesGroup(i + 1, panelWidth);
+    }
+
+    if (prevHeight != _height) {
+      _starting = true;
+      widget.onChangeHeight?.call(_height);
     }
   }
 
