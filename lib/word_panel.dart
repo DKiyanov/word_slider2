@@ -205,6 +205,7 @@ class WordPanelState extends State<WordPanel> {
   final _sensRectList = <Rect>[];
   DragBoxInfo? _selectedBoxInfo;
 
+  late  DragBox _testBox;
   late  DragBox _moveBox;
   late  DragBox _editPos;
   late  DragBox _insertPos;
@@ -230,7 +231,8 @@ class WordPanelState extends State<WordPanel> {
   void initState() {
     super.initState();
 
-    _moveBox   = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.move     , onBuild: widget.onDragBoxBuild, label: ValueProxy(''),);
+    _testBox   = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.none     , onBuild: widget.onDragBoxBuild, label: ValueProxy('Tp'));
+    _moveBox   = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.move     , onBuild: widget.onDragBoxBuild, label: ValueProxy(''));
     _editPos   = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.editPos  , onBuild: widget.onDragBoxBuild);
     _insertPos = DragBox(key: GlobalKey<DragBoxState>(), spec: DragBoxSpec.insertPos, onBuild: widget.onDragBoxBuild);
 
@@ -302,7 +304,6 @@ class WordPanelState extends State<WordPanel> {
 
     if (_rebuildStrNeed) {
       _rebuildStrNeed = false;
-      _buildBoxesString(width);
 
       if (_editPosWidth == 0.0) {
         _editPosWidth   = _getDragBoxRenderBox(_editPos).size.width;
@@ -310,6 +311,16 @@ class WordPanelState extends State<WordPanel> {
       if (_insertPosWidth == 0.0) {
         _insertPosWidth = _getDragBoxRenderBox(_insertPos).size.width;
       }
+      if (_wordBoxHeight == 0.0) {
+        _wordBoxHeight = _getDragBoxRenderBox(_testBox).size.height;
+      }
+
+      _buildBoxesString(width);
+
+      final testBoxState = dragBoxKey(_testBox).currentState!;
+      testBoxState.setState((){
+        testBoxState.visible = false;
+      });
 
       final insertPosState = dragBoxKey(_insertPos).currentState!;
       insertPosState.setState((){
@@ -333,7 +344,7 @@ class WordPanelState extends State<WordPanel> {
 
   void _buildBoxesString(double width){
     final prevHeight = _height;
-    _wordBoxHeight = 0;
+    _height = _wordBoxHeight;
 
     var position = const Offset(0,0);
     Offset nextPosition;
@@ -343,11 +354,6 @@ class WordPanelState extends State<WordPanel> {
       final boxKey = dragBoxKey(boxInfo.boxWidget);
 
       final renderBox = boxKey.currentContext!.findRenderObject() as RenderBox;
-
-      if (_wordBoxHeight == 0.0) {
-        _wordBoxHeight = renderBox.size.height;
-        _height = _wordBoxHeight;
-      }
 
       nextPosition = Offset(position.dx + renderBox.size.width, position.dy);
       if (nextPosition.dx >= width){
@@ -554,6 +560,7 @@ class WordPanelState extends State<WordPanel> {
     widget.controller._panelState = this;
 
     final childList = _boxInfoList.map((boxInfo)=>boxInfo.boxWidget).toList();
+    childList.add(_testBox);
     childList.add(_moveBox);
     childList.add(_editPos);
     childList.add(_insertPos);

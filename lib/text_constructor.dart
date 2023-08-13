@@ -16,6 +16,8 @@ class TextConstructorWidget extends StatefulWidget {
 }
 
 class _TextConstructorWidgetState extends State<TextConstructorWidget> {
+  static const String wordKeyboard = '@keyboard';
+
   late TextConstructorData _textConstructorData;
   late WordPanelController _controller;
 
@@ -321,6 +323,12 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
   Future<String?> onDragBoxTap(String label, Offset position) async {
     if (label.isEmpty) return label;
 
+    if (label == wordKeyboard) {
+      final inputValue = await wordInputDialog(context);
+      if (inputValue.isEmpty) return null;
+      return inputValue;
+    }
+
     if (_textConstructorData.markStyle >= 0){
       if (label.substring(0, 1) == '\$') {
         label = label.substring(1);
@@ -374,8 +382,25 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
     return labelWidget(context, label, DragBoxSpec.none);
   }
 
+  double internalBoxHeight() {
+    if (_controller.wordBoxHeight == 0.0) return 20.0;
+    return _controller.wordBoxHeight - 2;
+  }
+
   Widget labelWidget(BuildContext context, String label, DragBoxSpec spec) {
     if (label.isEmpty) return Container();
+
+    if (label == wordKeyboard) {
+      return makeDecoration(
+        child           : SizedBox(
+          height : internalBoxHeight(),
+          child  : const Icon(Icons.keyboard_alt_outlined, color: Colors.white)
+        ),
+        borderColor     : _borderColor,
+        borderWidth     : _borderWidth,
+        backgroundColor : _colorWordNormal,
+      );
+    }
 
     var viewIndex = -1;
 
