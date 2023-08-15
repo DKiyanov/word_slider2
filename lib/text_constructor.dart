@@ -19,7 +19,8 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
   static const String wordKeyboard = '@keyboard';
 
   late TextConstructorData _textConstructorData;
-  late WordPanelController _controller;
+  late WordPanelController _panelController;
+  late WordGridController  _basementController;
 
   final Color  _defaultTextColor  = Colors.white;
   final double _fontSize          = 40.0;
@@ -61,13 +62,15 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
 
     _textConstructorData = widget.textConstructor; //TextConstructorData.fromMap(jsonDecode(textConstructorJson));
 
-    _controller = WordPanelController(
+    _panelController = WordPanelController(
       text          : _textConstructorData.text,
       onChange      : _onChange,
       canMoveWord   : _textConstructorData.canMoveWord,
       noCursor      : _textConstructorData.noCursor,
       focusAsCursor : _textConstructorData.focusAsCursor,
     );
+
+    _basementController = WordGridController(widget.textConstructor.basement);
   }
 
   void _onChange() {
@@ -78,7 +81,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
       _historyPos = -1;
     }
 
-    _historyList.add(_controller.text);
+    _historyList.add(_panelController.text);
     _toolBarRefresh.send();
   }
 
@@ -166,13 +169,13 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
     return Padding(
       padding: const EdgeInsets.all(6.0),
       child: WordPanel(
-        controller         : _controller,
+        controller         : _panelController,
         onDragBoxBuild     : onDragBoxBuild,
         onDragBoxTap       : onDragBoxTap,
         onDragBoxLongPress : onDragBoxLongPress,
         onDoubleTap        : onDragBoxLongPress,
         onChangeHeight     : (double newHeight) {
-          final newPanelHeight = newHeight + 12 + _controller.wordBoxHeight;
+          final newPanelHeight = newHeight + 12 + _panelController.wordBoxHeight;
           if (_panelHeight != newPanelHeight) {
             setState(() {
               _panelHeight = newPanelHeight;
@@ -187,7 +190,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
     return Padding(
       padding: const EdgeInsets.all(6.0),
       child: WordGrid(
-        text           : _textConstructorData.basement,
+        controller     : _basementController,
         onDrawBoxBuild : onBasementBoxBuild,
         onDrawBoxTap   : onBasementBoxTap,
         onChangeHeight : (double newHeight) {
@@ -217,9 +220,9 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
                         final word = await wordInputDialog(context);
                         if (word.isEmpty) return;
 
-                        final pos = _controller.getCursorPos(lastPostIfNot: true);
-                        _controller.insertWord(pos, word);
-                        _controller.refreshPanel();
+                        final pos = _panelController.getCursorPos(lastPostIfNot: true);
+                        _panelController.insertWord(pos, word);
+                        _panelController.refreshPanel();
                       },
                       icon: const Icon(Icons.keyboard_alt_outlined),
                     ),
@@ -235,7 +238,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
                         }
 
                         _historyRecordOn = false;
-                        _controller.text = _historyList[_historyPos];
+                        _panelController.text = _historyList[_historyPos];
                         _historyRecordOn = true;
 
                         _toolBarRefresh.send();
@@ -249,7 +252,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
                       onPressed: (_historyPos < 0 || _historyPos == (_historyList.length - 1) ) ? null : (){
                         _historyPos ++;
                         _historyRecordOn = false;
-                        _controller.text = _historyList[_historyPos];
+                        _panelController.text = _historyList[_historyPos];
                         _historyRecordOn = true;
 
                         _toolBarRefresh.send();
@@ -275,7 +278,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
                   if (_textConstructorData.btnClear) ...[
                     IconButton(
                       onPressed: (){
-                        _controller.text = '';
+                        _panelController.text = '';
                       },
                       icon: const Icon(Icons.clear_outlined),
                     ),
@@ -297,11 +300,11 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
 
   void deleteWord([int posAdd = 0]){
     bool cursor = true;
-    var pos = _controller.getCursorPos(onlyCursor: true);
+    var pos = _panelController.getCursorPos(onlyCursor: true);
 
     if (pos < 0) {
       cursor = false;
-      pos = _controller.getFocusPos();
+      pos = _panelController.getFocusPos();
       if (pos < 0) return;
     }
 
@@ -309,14 +312,22 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
 
     if (pos < 0) return;
 
-    _controller.deleteWord(pos);
-    _controller.refreshPanel();
+    var word = _panelController.getWord(pos);
+
+    _panelController.deleteWord(pos);
+    _panelController.refreshPanel();
 
     if (cursor) {
-      _controller.setCursorPos(pos);
+      _panelController.setCursorPos(pos);
     } else {
-      _controller.setFocusPos(pos);
+      _panelController.setFocusPos(pos);
     }
+
+    if (word.substring(0,1) == '\$') {
+      word = word.substring(1);
+    }
+
+    _basementController.addWord(word);
   }
 
 
@@ -351,7 +362,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
         color: _editPosColor,
       ),
       width: _editPosWidth,
-      height: _controller.wordBoxHeight,
+      height: _panelController.wordBoxHeight,
     );
   }
 
@@ -362,7 +373,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
         color: _insertPosColor,
       ),
       width: _insertPosWidth,
-      height: _controller.wordBoxHeight,
+      height: _panelController.wordBoxHeight,
     );
   }
 
@@ -383,8 +394,8 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
   }
 
   double internalBoxHeight() {
-    if (_controller.wordBoxHeight == 0.0) return 20.0;
-    return _controller.wordBoxHeight - 2;
+    if (_panelController.wordBoxHeight == 0.0) return 20.0;
+    return _panelController.wordBoxHeight - 2;
   }
 
   Widget labelWidget(BuildContext context, String label, DragBoxSpec spec) {
@@ -665,9 +676,9 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
   }
 
   Future<bool?> onBasementBoxTap(String label, Offset position) async {
-    final curPos = _controller.getCursorPos(lastPostIfNot: true);
-    _controller.insertWord(curPos, label);
-    _controller.refreshPanel();
+    final curPos = _panelController.getCursorPos(lastPostIfNot: true);
+    _panelController.insertWord(curPos, label);
+    _panelController.refreshPanel();
     return false;
   }
 

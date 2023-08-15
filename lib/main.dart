@@ -9,7 +9,7 @@ void main() => runApp(MyApp());
 const String textConstructorJson = '''
 {
    "text" : "начальный текст в конструкторе @keyboard #0|символ",
-   "basement" : "<|G1|>на 'ч аль' ны й текст <|G2|>в конструкторе, #0|символ",
+   "basement" : "<|G1|>на 'ч аль' ны й ~текст <|G2|>в конструкторе, #0|символ",
    
    "objects": [
    

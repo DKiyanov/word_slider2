@@ -1,6 +1,23 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
+class WordGridController {
+  _WordGridState? _gridState;
+
+  String _text = '';
+
+  WordGridController(String text){
+    _text = text;
+  }
+
+  void addWord(String word) {
+    if (_gridState == null) return;
+    if (!_gridState!.mounted) return;
+
+    _gridState!._addWord(word);
+  }
+}
+
 class DragBoxInfo{
   final DrawBox boxWidget;
   Size size = Size.zero;
@@ -16,13 +33,13 @@ GlobalKey<DrawBoxState> drawBoxKey(DrawBox drawBox){
 typedef OnChangeHeight = void Function(double newHeight);
 
 class WordGrid extends StatefulWidget {
-  final String          text;
+  final WordGridController controller;
   final DrawBoxBuilder  onDrawBoxBuild;
   final DrawBoxTap?     onDrawBoxTap;
   final OnChangeHeight? onChangeHeight;
   final double          lineSpacing; // line spacing
 
-  const WordGrid({required this.text, required this.onDrawBoxBuild, this.onDrawBoxTap, this.onChangeHeight, this.lineSpacing = 5, Key? key}) : super(key: key);
+  const WordGrid({required this.controller, required this.onDrawBoxBuild, this.onDrawBoxTap, this.onChangeHeight, this.lineSpacing = 5, Key? key}) : super(key: key);
 
   @override
   State<WordGrid> createState() => _WordGridState();
@@ -37,11 +54,13 @@ class _WordGridState extends State<WordGrid> {
   double _width = 0.0;
   double _height = 0.0;
 
+  final _initHideList = <GlobalKey<DrawBoxState>>[];
+
   @override
   void initState() {
     super.initState();
 
-    _setText(widget.text);
+    _setText(widget.controller._text);
   }
 
   void _setText(String text){
@@ -97,12 +116,19 @@ class _WordGridState extends State<WordGrid> {
 
     for (var word in wordList) {
       if (word.isNotEmpty) {
+        final key = GlobalKey<DrawBoxState>();
+
+        if (word.substring(0,1) == '~'){
+          word = word.substring(1);
+          _initHideList.add(key);
+        }
+
         _boxInfoList.add(
             DragBoxInfo(
                 DrawBox(
                     label        : word,
                     onBuild      : widget.onDrawBoxBuild,
-                    key          : GlobalKey<DrawBoxState>()
+                    key          : key,
                 )
             )
         );
@@ -127,11 +153,21 @@ class _WordGridState extends State<WordGrid> {
 
   void _putBoxesInPlaces(double panelWidth){
     for (var boxInfo in _boxInfoList) {
+      if (boxInfo.size.width !=0 ) continue;
+
       final boxKey = drawBoxKey(boxInfo.boxWidget);
 
       final renderBox = boxKey.currentContext!.findRenderObject() as RenderBox;
       boxInfo.size = renderBox.size;
+
+      if (_initHideList.contains(boxKey)) {
+        boxKey.currentState!.setState((){
+          boxKey.currentState!.visible = false;
+        });
+      }
     }
+
+    _initHideList.clear();
 
     final prevHeight = _height;
     _height = 0.0;
@@ -299,6 +335,8 @@ class _WordGridState extends State<WordGrid> {
 
   @override
   Widget build(BuildContext context) {
+    widget.controller._gridState = this;
+
     final childList = _boxInfoList.map((boxInfo)=>boxInfo.boxWidget).toList();
 
     return LayoutBuilder(builder: (BuildContext context, BoxConstraints viewportConstraints) {
@@ -361,6 +399,18 @@ class _WordGridState extends State<WordGrid> {
 
   Widget _groupHead(BuildContext context, String label) {
     return Text(label);
+  }
+
+  void _addWord(String word) {
+    final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo) => boxInfo.boxWidget.label == word);
+    if (boxInfo != null) {
+      final boxKey = drawBoxKey(boxInfo.boxWidget);
+      final boxState = boxKey.currentState!;
+      boxState.setState(() {
+        boxState.visible = true;
+      });
+      return;
+    }
   }
 }
 
