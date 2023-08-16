@@ -5,6 +5,8 @@ import 'package:word_slider2/word_panel.dart';
 import 'package:word_slider2/word_panel_model.dart';
 import 'package:simple_events/simple_events.dart';
 
+import 'drag_box_widget.dart';
+
 String _txtDialogInputText = 'Введите текст';
 
 class TextConstructorWidget extends StatefulWidget {
@@ -191,8 +193,8 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
       padding: const EdgeInsets.all(6.0),
       child: WordGrid(
         controller     : _basementController,
-        onDrawBoxBuild : onBasementBoxBuild,
-        onDrawBoxTap   : onBasementBoxTap,
+        onDragBoxBuild : onBasementBoxBuild,
+        onDragBoxTap   : onBasementBoxTap,
         onChangeHeight : (double newHeight) {
           if (_basementHeight != newHeight) {
             setState(() {
@@ -389,7 +391,15 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
     return labelWidget(context, label, spec);
   }
 
-  Widget onBasementBoxBuild(BuildContext context, String label) {
+  Widget basementGroupHead(BuildContext context, String label) {
+    return Text(label);
+  }
+
+  Widget onBasementBoxBuild(BuildContext context, String label, DragBoxSpec spec) {
+    if (spec == DragBoxSpec.isGroup) {
+      return basementGroupHead(context, label);
+    }
+
     return labelWidget(context, label, DragBoxSpec.none);
   }
 

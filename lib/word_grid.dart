@@ -1,6 +1,11 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
+import 'drag_box_widget.dart';
+
+typedef DragBoxTap = Future<bool?> Function(String label, Offset position);
+typedef OnChangeHeight = void Function(double newHeight);
+
 class WordGridController {
   _WordGridState? _gridState;
 
@@ -18,28 +23,14 @@ class WordGridController {
   }
 }
 
-class DragBoxInfo{
-  final DrawBox boxWidget;
-  Size size = Size.zero;
-  Rect rect = Rect.zero;
-  bool isGroup = false;
-  DragBoxInfo(this.boxWidget, [this.isGroup = false]);
-}
-
-GlobalKey<DrawBoxState> drawBoxKey(DrawBox drawBox){
-  return drawBox.key as GlobalKey<DrawBoxState>;
-}
-
-typedef OnChangeHeight = void Function(double newHeight);
-
 class WordGrid extends StatefulWidget {
   final WordGridController controller;
-  final DrawBoxBuilder  onDrawBoxBuild;
-  final DrawBoxTap?     onDrawBoxTap;
+  final DragBoxBuilder  onDragBoxBuild;
+  final DragBoxTap?     onDragBoxTap;
   final OnChangeHeight? onChangeHeight;
-  final double          lineSpacing; // line spacing
+  final double          lineSpacing;
 
-  const WordGrid({required this.controller, required this.onDrawBoxBuild, this.onDrawBoxTap, this.onChangeHeight, this.lineSpacing = 5, Key? key}) : super(key: key);
+  const WordGrid({required this.controller, required this.onDragBoxBuild, this.onDragBoxTap, this.onChangeHeight, this.lineSpacing = 5, Key? key}) : super(key: key);
 
   @override
   State<WordGrid> createState() => _WordGridState();
@@ -54,7 +45,7 @@ class _WordGridState extends State<WordGrid> {
   double _width = 0.0;
   double _height = 0.0;
 
-  final _initHideList = <GlobalKey<DrawBoxState>>[];
+  final _initHideList = <GlobalKey<DragBoxState>>[];
 
   @override
   void initState() {
@@ -77,14 +68,12 @@ class _WordGridState extends State<WordGrid> {
       }
 
       final groupWord = text.substring(element.start+2, element.end-2);
+
       _boxInfoList.add(
-        DragBoxInfo(
-          DrawBox(
-              label  : groupWord,
-              onBuild: _groupHead,
-              key    : GlobalKey<DrawBoxState>()
-          ),
-          true
+        DragBoxInfo.create(
+          builder: widget.onDragBoxBuild,
+          label : groupWord,
+          spec  : DragBoxSpec.isGroup,
         )
       );
 
@@ -116,7 +105,7 @@ class _WordGridState extends State<WordGrid> {
 
     for (var word in wordList) {
       if (word.isNotEmpty) {
-        final key = GlobalKey<DrawBoxState>();
+        final key = GlobalKey<DragBoxState>();
 
         if (word.substring(0,1) == '~'){
           word = word.substring(1);
@@ -124,14 +113,12 @@ class _WordGridState extends State<WordGrid> {
         }
 
         _boxInfoList.add(
-            DragBoxInfo(
-                DrawBox(
-                    label        : word,
-                    onBuild      : widget.onDrawBoxBuild,
-                    key          : key,
-                )
-            )
+          DragBoxInfo.create(
+            builder: widget.onDragBoxBuild,
+            label  : word,
+          )
         );
+
       }
     }
   }
@@ -155,15 +142,10 @@ class _WordGridState extends State<WordGrid> {
     for (var boxInfo in _boxInfoList) {
       if (boxInfo.size.width !=0 ) continue;
 
-      final boxKey = drawBoxKey(boxInfo.boxWidget);
+      boxInfo.refreshSize();
 
-      final renderBox = boxKey.currentContext!.findRenderObject() as RenderBox;
-      boxInfo.size = renderBox.size;
-
-      if (_initHideList.contains(boxKey)) {
-        boxKey.currentState!.setState((){
-          boxKey.currentState!.visible = false;
-        });
+      if (_initHideList.contains(boxInfo.widget.key)) {
+        boxInfo.setState(visible: false);
       }
     }
 
@@ -172,18 +154,15 @@ class _WordGridState extends State<WordGrid> {
     final prevHeight = _height;
     _height = 0.0;
 
-    if (!_boxInfoList.first.isGroup) {
+    if (_boxInfoList.first.data.spec != DragBoxSpec.isGroup) {
       _putBoxesGroup(0, panelWidth);
     }
 
     for (var i = 0; i < _boxInfoList.length; i++) {
       final boxInfo = _boxInfoList[i];
-      if (!boxInfo.isGroup) continue;
+      if (boxInfo.data.spec != DragBoxSpec.isGroup) continue;
 
-      final boxKey = drawBoxKey(boxInfo.boxWidget);
-      boxKey.currentState!.setState((){
-        boxKey.currentState!.position = Offset(panelWidth / 2 - boxInfo.size.width / 2, _height);
-      });
+      boxInfo.setState(position: Offset(panelWidth / 2 - boxInfo.size.width / 2, _height));
 
       _height += boxInfo.size.height;
 
@@ -212,7 +191,7 @@ class _WordGridState extends State<WordGrid> {
 
     for (var i = fromIndex; i < _boxInfoList.length; i++) {
       final boxInfo = _boxInfoList[i];
-      if (boxInfo.isGroup) {
+      if (boxInfo.data.spec == DragBoxSpec.isGroup) {
         toIndex = i - 1;
         break;
       }
@@ -300,11 +279,7 @@ class _WordGridState extends State<WordGrid> {
         }
       }
 
-      final boxKey = drawBoxKey(boxInfo.boxWidget);
-      boxKey.currentState!.setState((){
-        boxInfo.rect = Rect.fromLTWH(position.dx, position.dy, boxInfo.size.width, boxInfo.size.height);
-        boxKey.currentState!.position = position;
-      });
+      boxInfo.setState(position: position);
 
       position = nextPosition;
     }
@@ -337,7 +312,7 @@ class _WordGridState extends State<WordGrid> {
   Widget build(BuildContext context) {
     widget.controller._gridState = this;
 
-    final childList = _boxInfoList.map((boxInfo)=>boxInfo.boxWidget).toList();
+    final childList = _boxInfoList.map((boxInfo)=>boxInfo.widget).toList();
 
     return LayoutBuilder(builder: (BuildContext context, BoxConstraints viewportConstraints) {
 
@@ -390,61 +365,18 @@ class _WordGridState extends State<WordGrid> {
   }
 
   Future<void> _onTapUp(TapUpDetails details) async {
-    if (widget.onDrawBoxTap == null) return;
+    if (widget.onDragBoxTap == null) return;
     final boxInfo = getBoxAtPos(details.globalPosition);
     if (boxInfo == null) return;
 
-    widget.onDrawBoxTap!.call(boxInfo.boxWidget.label, boxInfo.rect.topLeft);
-  }
-
-  Widget _groupHead(BuildContext context, String label) {
-    return Text(label);
+    widget.onDragBoxTap!.call(boxInfo.data.label, boxInfo.data.position);
   }
 
   void _addWord(String word) {
-    final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo) => boxInfo.boxWidget.label == word);
+    final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo) => boxInfo.data.label == word);
     if (boxInfo != null) {
-      final boxKey = drawBoxKey(boxInfo.boxWidget);
-      final boxState = boxKey.currentState!;
-      boxState.setState(() {
-        boxState.visible = true;
-      });
+      boxInfo.setState(visible: true);
       return;
     }
-  }
-}
-
-typedef DrawBoxBuilder = Widget Function(BuildContext context, String label);
-typedef DrawBoxTap = Future<bool?> Function(String label, Offset position);
-
-class DrawBox extends StatefulWidget {
-  final String label;
-  final DrawBoxBuilder onBuild;
-
-  const DrawBox({this.label = '', required this.onBuild, Key? key})  : super(key: key);
-
-  @override
-  State<DrawBox> createState() => DrawBoxState();
-}
-
-class DrawBoxState extends State<DrawBox> {
-  Offset position  = const Offset(0.0, 0.0);
-  bool   visible   = true;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!visible){
-      return Positioned(
-          left: 0,
-          top: 0,
-          child: Container()
-      );
-    }
-
-    return  Positioned(
-        left  : position.dx,
-        top   : position.dy,
-        child: widget.onBuild.call(context, widget.label)
-    );
   }
 }
