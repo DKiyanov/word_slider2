@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 
+import 'boxes_area.dart';
 import 'drag_box_widget.dart';
 
 typedef DragBoxTap = Future<bool?> Function(String label, Offset position);
@@ -37,15 +38,13 @@ class WordGrid extends StatefulWidget {
 }
 
 class _WordGridState extends State<WordGrid> {
-  final _stackKey = GlobalKey();
-  bool _starting = true;
   final _boxInfoList = <DragBoxInfo>[];
   bool _rebuildStrNeed = false;
 
-  double _width = 0.0;
-  double _height = 0.0;
+  final _initHideList = <DragBoxInfo>[];
 
-  final _initHideList = <GlobalKey<DragBoxState>>[];
+  double _width  = 0.0;
+  double _height = 0.0;
 
   @override
   void initState() {
@@ -105,53 +104,38 @@ class _WordGridState extends State<WordGrid> {
 
     for (var word in wordList) {
       if (word.isNotEmpty) {
-        final key = GlobalKey<DragBoxState>();
-
+        var hide = false;
         if (word.substring(0,1) == '~'){
           word = word.substring(1);
-          _initHideList.add(key);
+          hide = true;
         }
 
-        _boxInfoList.add(
-          DragBoxInfo.create(
-            builder: widget.onDragBoxBuild,
-            label  : word,
-          )
+        final boxInfo = DragBoxInfo.create(
+          builder: widget.onDragBoxBuild,
+          label  : word,
         );
 
-      }
-    }
-  }
+        _boxInfoList.add(boxInfo);
 
-  void _rebuildStr(double width){
-    if (!_rebuildStrNeed) {
-      if (_width != width) {
-        _rebuildStrNeed = true;
-        _width = width;
-        _starting = true;
-      }
-    }
+        if (hide) {
+          _initHideList.add(boxInfo);
+        }
 
-    if (_rebuildStrNeed) {
-      _rebuildStrNeed = false;
-      _putBoxesInPlaces(width);
+      }
     }
   }
 
   void _putBoxesInPlaces(double panelWidth){
-    for (var boxInfo in _boxInfoList) {
-      if (boxInfo.size.width !=0 ) continue;
-
-      boxInfo.refreshSize();
-
-      if (_initHideList.contains(boxInfo.widget.key)) {
-        boxInfo.setState(visible: false);
+    if (_initHideList.isNotEmpty) {
+      for (var boxInfo in _boxInfoList) {
+        if (_initHideList.contains(boxInfo)) {
+          boxInfo.setState(visible: false);
+        }
       }
+
+      _initHideList.clear();
     }
 
-    _initHideList.clear();
-
-    final prevHeight = _height;
     _height = 0.0;
 
     if (_boxInfoList.first.data.spec != DragBoxSpec.isGroup) {
@@ -167,11 +151,6 @@ class _WordGridState extends State<WordGrid> {
       _height += boxInfo.size.height;
 
       _putBoxesGroup(i + 1, panelWidth);
-    }
-
-    if (prevHeight != _height) {
-      _starting = true;
-      widget.onChangeHeight?.call(_height);
     }
   }
 
@@ -312,64 +291,30 @@ class _WordGridState extends State<WordGrid> {
   Widget build(BuildContext context) {
     widget.controller._gridState = this;
 
-    final childList = _boxInfoList.map((boxInfo)=>boxInfo.widget).toList();
+    return BoxesArea(
+      boxInfoList: _boxInfoList,
 
-    return LayoutBuilder(builder: (BuildContext context, BoxConstraints viewportConstraints) {
-
-        WidgetsBinding.instance.addPostFrameCallback((_){
-          _rebuildStr(viewportConstraints.maxWidth);
-
-          if (_starting) {
-            setState(() {
-              _starting = false;
-            });
-          }
-        });
-
-        if (_starting) {
-          return Offstage(
-            child: Stack(
-              children: childList,
-            ),
-          );
+      onRebuildLayout: (BoxConstraints viewportConstraints, List<DragBoxInfo> boxInfoList) {
+        if (_width != viewportConstraints.maxWidth) {
+          _width = viewportConstraints.maxWidth;
+          _rebuildStrNeed = true;
         }
 
-        return SingleChildScrollView(
-          child: GestureDetector(
-            onTapUp: (details) => _onTapUp(details),
-            child: SizedBox(
-              width: _width,
-              height: _height,
+        if (!_rebuildStrNeed) return;
+        _rebuildStrNeed = false;
+        _putBoxesInPlaces(viewportConstraints.maxWidth);
+      },
 
-              child: Stack(
-                key : _stackKey,
-                children: childList,
-              ),
-            ),
-          ),
-        );
+      onDragBoxTap: (DragBoxInfo? boxInfo, Offset position) async {
+        if (boxInfo == null) return null;
+
+        return widget.onDragBoxTap!.call(boxInfo.data.label, boxInfo.data.position);
+      },
+
+      onChangeSize: (double newWidth, double newHeight){
+        widget.onChangeHeight?.call(newHeight);
       },
     );
-  }
-
-  RenderBox _getStackRenderBox(){
-    return _stackKey.currentContext!.findRenderObject() as RenderBox;
-  }
-
-  DragBoxInfo? getBoxAtPos(Offset globalPosition) {
-    final renderBox = _getStackRenderBox();
-    final position = renderBox.globalToLocal(globalPosition);
-
-    final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo)=>boxInfo.rect.contains(position));
-    return boxInfo;
-  }
-
-  Future<void> _onTapUp(TapUpDetails details) async {
-    if (widget.onDragBoxTap == null) return;
-    final boxInfo = getBoxAtPos(details.globalPosition);
-    if (boxInfo == null) return;
-
-    widget.onDragBoxTap!.call(boxInfo.data.label, boxInfo.data.position);
   }
 
   void _addWord(String word) {
