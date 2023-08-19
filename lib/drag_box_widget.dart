@@ -1,35 +1,23 @@
 import 'package:flutter/material.dart';
 
-enum DragBoxSpec {
-  none,
-  move,
-  canDrop,
-  focus,
-  insertPos,
-  editPos,
-  isGroup,
-}
-
-typedef DragBoxBuilder = Widget Function(BuildContext context, String label, DragBoxSpec spec);
+typedef DragBoxBuilder<T> = Widget Function(BuildContext context, T ext);
 
 
-class DragBoxData{
-  String label;
+class DragBoxData<T>{
   Offset position;
   bool   visible;
-  DragBoxSpec spec;
+  T      ext;
 
   DragBoxData({
-    this.label    = '',
     this.position =  const Offset(0.0, 0.0),
     this.visible  = true,
-    this.spec     = DragBoxSpec.none,
+    required this.ext,
   });
 }
 
-class DragBoxInfo{
+class DragBoxInfo<T>{
   final DragBox widget;
-  final DragBoxData data;
+  final DragBoxData<T> data;
 
   DragBoxInfo({required this.widget, required this.data});
 
@@ -37,22 +25,18 @@ class DragBoxInfo{
   Rect get rect => Rect.fromLTWH(data.position.dx, data.position.dy, size.width, size.height);
 
   void setState({
-    String?      label,
     Offset?      position,
     bool?        visible,
-    DragBoxSpec? spec,
+    T?           ext,
   }){
-    if (label != null) {
-      data.label = label;
-    }
     if (position != null) {
       data.position = position;
     }
     if (visible != null) {
       data.visible = visible;
     }
-    if (spec != null) {
-      data.spec = spec;
+    if (ext != null) {
+      data.ext = ext;
     }
 
     final boxKey = widget.key as GlobalKey<DragBoxState>;
@@ -67,11 +51,11 @@ class DragBoxInfo{
     size = renderBox.size;
   }
 
-  static DragBoxInfo create({required DragBoxBuilder builder, String label = '', DragBoxSpec spec = DragBoxSpec.none}){
-    final boxData = DragBoxData(label: label, spec: spec);
+  static DragBoxInfo<T> create<T>({required DragBoxBuilder<T> builder, required T ext}){
+    final boxData = DragBoxData<T>(ext: ext);
 
-    return DragBoxInfo(
-      widget : DragBox(
+    return DragBoxInfo<T>(
+      widget : DragBox<T>(
           data    : boxData,
           onBuild : builder,
           key     : GlobalKey<DragBoxState>()
@@ -82,18 +66,17 @@ class DragBoxInfo{
   }
 }
 
-class DragBox extends StatefulWidget {
-  final DragBoxData data;
-  final DragBoxBuilder onBuild;
+class DragBox<T> extends StatefulWidget {
+  final DragBoxData<T> data;
+  final DragBoxBuilder<T> onBuild;
 
   const DragBox({required this.data, required this.onBuild, Key? key})  : super(key: key);
 
   @override
-  State<DragBox> createState() => DragBoxState();
+  State<DragBox<T>> createState() => DragBoxState<T>();
 }
 
-class DragBoxState extends State<DragBox> {
-
+class DragBoxState<T> extends State<DragBox<T>> {
   @override
   Widget build(BuildContext context) {
     if (!widget.data.visible){
@@ -107,7 +90,7 @@ class DragBoxState extends State<DragBox> {
     return Positioned(
         left  : widget.data.position.dx,
         top   : widget.data.position.dy,
-        child : widget.onBuild.call(context, widget.data.label, widget.data.spec)
+        child : widget.onBuild.call(context, widget.data.ext)
     );
   }
 }

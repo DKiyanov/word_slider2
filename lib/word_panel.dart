@@ -7,6 +7,21 @@ import 'drag_box_widget.dart';
 typedef DragBoxTap = Future<String?> Function(String label, Offset position);
 typedef OnChangeHeight = void Function(double newHeight);
 
+enum DragBoxSpec {
+  none,
+  move,
+  canDrop,
+  focus,
+  insertPos,
+  editPos,
+}
+
+class PanelBoxExt{
+  String label;
+  DragBoxSpec spec;
+  PanelBoxExt({this.label = '', this.spec = DragBoxSpec.none });
+}
+
 class WordPanelController {
   WordPanelState? _panelState;
 
@@ -162,7 +177,7 @@ class WordPanelController {
 
 class WordPanel extends StatefulWidget {
   final WordPanelController controller;
-  final DragBoxBuilder      onDragBoxBuild;
+  final DragBoxBuilder<PanelBoxExt> onDragBoxBuild;
   final DragBoxTap?         onDragBoxTap;
   final DragBoxTap?         onDragBoxLongPress;
   final DragBoxTap?         onDoubleTap;
@@ -188,16 +203,16 @@ class WordPanel extends StatefulWidget {
 
 class WordPanelState extends State<WordPanel> {
   final _stackKey = GlobalKey();
-  final _boxInfoList = <DragBoxInfo>[];
+  final _boxInfoList = <DragBoxInfo<PanelBoxExt>>[];
   final _sensRectList = <Rect>[];
-  DragBoxInfo? _selectedBoxInfo;
+  DragBoxInfo<PanelBoxExt>? _selectedBoxInfo;
 
-  late  DragBoxInfo _testBox;
-  late  DragBoxInfo _moveBox;
-  late  DragBoxInfo _editPos;
-  late  DragBoxInfo _insertPos;
+  late  DragBoxInfo<PanelBoxExt> _testBox;
+  late  DragBoxInfo<PanelBoxExt> _moveBox;
+  late  DragBoxInfo<PanelBoxExt> _editPos;
+  late  DragBoxInfo<PanelBoxExt> _insertPos;
 
-  DragBoxInfo? _focusBox;
+  DragBoxInfo<PanelBoxExt>? _focusBox;
 
   bool _insertPosVisible = false;
 
@@ -226,11 +241,10 @@ class WordPanelState extends State<WordPanel> {
     _setText(widget.controller._text);
   }
 
-  DragBoxInfo _createDragBoxInfo({String label = '', DragBoxSpec spec = DragBoxSpec.none}){
-    return DragBoxInfo.create(
+  DragBoxInfo<PanelBoxExt> _createDragBoxInfo({String label = '', DragBoxSpec spec = DragBoxSpec.none}){
+    return DragBoxInfo.create<PanelBoxExt>(
       builder: widget.onDragBoxBuild,
-      label  : label,
-      spec   : spec,
+      ext    : PanelBoxExt(label: label, spec: spec),
     );
   }
 
@@ -244,10 +258,10 @@ class WordPanelState extends State<WordPanel> {
     _rebuildStrNeed = true;
   }
 
-  List<DragBoxInfo> _splitText(String text) {
+  List<DragBoxInfo<PanelBoxExt>> _splitText(String text) {
     if (text.isEmpty) return [];
 
-    final result = <DragBoxInfo>[];
+    final result = <DragBoxInfo<PanelBoxExt>>[];
 
     final wordList = <String>[];
 
@@ -367,7 +381,7 @@ class WordPanelState extends State<WordPanel> {
     String ret = '';
 
     for (var i = 0; i < _boxInfoList.length; i++) {
-      final label = _boxInfoList[i].data.label;
+      final label = _boxInfoList[i].data.ext.label;
 
       if (ret.isEmpty) {
         ret = label;
@@ -380,7 +394,7 @@ class WordPanelState extends State<WordPanel> {
   }
 
   String _getWord(int pos){
-    return _boxInfoList[pos].data.label;
+    return _boxInfoList[pos].data.ext.label;
   }
 
   void _deleteWord(int fromPos, [int count = 1]){
@@ -425,16 +439,18 @@ class WordPanelState extends State<WordPanel> {
     if (boxInfo == _focusBox) return;
 
     if (_focusBox != null) {
-      _focusBox!.setState(spec: DragBoxSpec.none);
+      _focusBox!.data.ext.spec = DragBoxSpec.none;
+      _focusBox!.setState();
     }
 
-    boxInfo.setState(spec: DragBoxSpec.focus);
+    boxInfo.data.ext.spec = DragBoxSpec.focus;
   }
 
   void _hideFocus() {
     if (_focusBox == null) return;
 
-    _focusBox!.setState(spec: DragBoxSpec.none );
+    _focusBox!.data.ext.spec = DragBoxSpec.none;
+    _focusBox!.setState();
   }
 
   int _getCursorPos() {
@@ -554,10 +570,8 @@ class WordPanelState extends State<WordPanel> {
       _selectedBoxInfo = boxInfo;
       _selectInPos = Offset(position.dx - boxInfo.rect.left, position.dy - boxInfo.rect.top);
 
-      _moveBox.setState(
-        label   : boxInfo.data.label,
-        visible : false,
-      );
+      _moveBox.data.ext.label = boxInfo.data.ext.label;
+      _moveBox.setState(visible : false);
     }
   }
 
@@ -622,8 +636,8 @@ class WordPanelState extends State<WordPanel> {
       }
     }
 
+    _moveBox.data.ext.spec = insertPosVisible ? DragBoxSpec.canDrop : DragBoxSpec.move;
     _moveBox.setState(
-      spec     : insertPosVisible ? DragBoxSpec.canDrop : DragBoxSpec.move,
       position : moveBoxPosition,
       visible  : true,
     );
@@ -632,8 +646,8 @@ class WordPanelState extends State<WordPanel> {
   void _onPanEnd(DragEndDetails details) {
     if (_selectedBoxInfo == null) return;
 
+    _moveBox.data.ext.label = '';
     _moveBox.setState(
-      label    : '',
       visible  : false,
       position : const Offset(0,0),
     );
@@ -666,7 +680,7 @@ class WordPanelState extends State<WordPanel> {
 
       if (selIndex != insertIndex){
         final pos = _getCursorPos();
-        DragBoxInfo? cursorBoxInfo;
+        DragBoxInfo<PanelBoxExt>? cursorBoxInfo;
         int posAdd = 0;
         if (pos >= 0) {
           if (pos >= _boxInfoList.length) {
@@ -703,7 +717,7 @@ class WordPanelState extends State<WordPanel> {
     _selectedBoxInfo = null;
   }
 
-  DragBoxInfo? getBoxAtPos({Offset? globalPosition, Offset? localPosition, bool tapOnSensRect = true}) {
+  DragBoxInfo<PanelBoxExt>? getBoxAtPos({Offset? globalPosition, Offset? localPosition, bool tapOnSensRect = true}) {
     var position = localPosition;
 
     if (position == null && globalPosition != null) {
@@ -736,16 +750,17 @@ class WordPanelState extends State<WordPanel> {
 
     if (_focusBox != null) {
       if (_focusBox == boxInfo) {
-        boxInfo.data.spec = DragBoxSpec.none;
+        boxInfo.data.ext.spec = DragBoxSpec.none;
         _focusBox = null;
         setFocus = false;
       } else {
-        _focusBox!.setState(spec: DragBoxSpec.none);
+        _focusBox!.data.ext.spec = DragBoxSpec.none;
+        _focusBox!.setState();
       }
     }
 
     if (setFocus) {
-      boxInfo.data.spec = DragBoxSpec.focus;
+      boxInfo.data.ext.spec = DragBoxSpec.focus;
       _focusBox = boxInfo;
 
       if (widget.controller.focusAsCursor) {
@@ -756,10 +771,10 @@ class WordPanelState extends State<WordPanel> {
     bool labelChanged = false;
 
     if (widget.onDragBoxTap != null){
-      final newLabel = await widget.onDragBoxTap!.call(boxInfo.data.label, boxInfo.data.position);
+      final newLabel = await widget.onDragBoxTap!.call(boxInfo.data.ext.label, boxInfo.data.position);
       if (newLabel != null ) {
-        if (boxInfo.data.label != newLabel) {
-          boxInfo.data.label = newLabel;
+        if (boxInfo.data.ext.label != newLabel) {
+          boxInfo.data.ext.label = newLabel;
           labelChanged = true;
         }
       }
@@ -780,10 +795,11 @@ class WordPanelState extends State<WordPanel> {
     final boxInfo = getBoxAtPos(globalPosition : globalPosition);
     if (boxInfo == null) return;
 
-    final newLabel = await onDragTap.call(boxInfo.data.label, boxInfo.data.position);
-    if (newLabel == null || boxInfo.data.label == newLabel) return;
+    final newLabel = await onDragTap.call(boxInfo.data.ext.label, boxInfo.data.position);
+    if (newLabel == null || boxInfo.data.ext.label == newLabel) return;
 
-    boxInfo.setState(label: newLabel);
+    boxInfo.data.ext.label = newLabel;
+    boxInfo.setState();
 
     widget.controller.onChange?.call();
 

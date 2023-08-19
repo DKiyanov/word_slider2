@@ -7,6 +7,12 @@ import 'drag_box_widget.dart';
 typedef DragBoxTap = Future<bool?> Function(String label, Offset position);
 typedef OnChangeHeight = void Function(double newHeight);
 
+class GridBoxExt{
+  final String label;
+  final bool isGroup;
+  GridBoxExt({required this.label, this.isGroup = false});
+}
+
 class WordGridController {
   _WordGridState? _gridState;
 
@@ -26,7 +32,7 @@ class WordGridController {
 
 class WordGrid extends StatefulWidget {
   final WordGridController controller;
-  final DragBoxBuilder  onDragBoxBuild;
+  final DragBoxBuilder<GridBoxExt>  onDragBoxBuild;
   final DragBoxTap?     onDragBoxTap;
   final OnChangeHeight? onChangeHeight;
   final double          lineSpacing;
@@ -38,7 +44,8 @@ class WordGrid extends StatefulWidget {
 }
 
 class _WordGridState extends State<WordGrid> {
-  final _boxInfoList = <DragBoxInfo>[];
+  final _boxInfoList = <DragBoxInfo<GridBoxExt>>[];
+  late BoxesAreaController<GridBoxExt> _boxAreaController;
   bool _rebuildStrNeed = false;
 
   final _initHideList = <DragBoxInfo>[];
@@ -51,6 +58,7 @@ class _WordGridState extends State<WordGrid> {
     super.initState();
 
     _setText(widget.controller._text);
+    _boxAreaController = BoxesAreaController(_boxInfoList);
   }
 
   void _setText(String text){
@@ -69,10 +77,9 @@ class _WordGridState extends State<WordGrid> {
       final groupWord = text.substring(element.start+2, element.end-2);
 
       _boxInfoList.add(
-        DragBoxInfo.create(
+        DragBoxInfo.create<GridBoxExt>(
           builder: widget.onDragBoxBuild,
-          label : groupWord,
-          spec  : DragBoxSpec.isGroup,
+          ext: GridBoxExt(label: groupWord, isGroup: true)
         )
       );
 
@@ -110,9 +117,9 @@ class _WordGridState extends State<WordGrid> {
           hide = true;
         }
 
-        final boxInfo = DragBoxInfo.create(
+        final boxInfo = DragBoxInfo.create<GridBoxExt>(
           builder: widget.onDragBoxBuild,
-          label  : word,
+          ext: GridBoxExt(label: word),
         );
 
         _boxInfoList.add(boxInfo);
@@ -138,13 +145,13 @@ class _WordGridState extends State<WordGrid> {
 
     _height = 0.0;
 
-    if (_boxInfoList.first.data.spec != DragBoxSpec.isGroup) {
+    if (!_boxInfoList.first.data.ext.isGroup) {
       _putBoxesGroup(0, panelWidth);
     }
 
     for (var i = 0; i < _boxInfoList.length; i++) {
       final boxInfo = _boxInfoList[i];
-      if (boxInfo.data.spec != DragBoxSpec.isGroup) continue;
+      if (!boxInfo.data.ext.isGroup) continue;
 
       boxInfo.setState(position: Offset(panelWidth / 2 - boxInfo.size.width / 2, _height));
 
@@ -170,7 +177,7 @@ class _WordGridState extends State<WordGrid> {
 
     for (var i = fromIndex; i < _boxInfoList.length; i++) {
       final boxInfo = _boxInfoList[i];
-      if (boxInfo.data.spec == DragBoxSpec.isGroup) {
+      if (boxInfo.data.ext.isGroup) {
         toIndex = i - 1;
         break;
       }
@@ -291,8 +298,8 @@ class _WordGridState extends State<WordGrid> {
   Widget build(BuildContext context) {
     widget.controller._gridState = this;
 
-    return BoxesArea(
-      boxInfoList: _boxInfoList,
+    return BoxesArea<GridBoxExt>(
+      controller: _boxAreaController,
 
       onRebuildLayout: (BoxConstraints viewportConstraints, List<DragBoxInfo> boxInfoList) {
         if (_width != viewportConstraints.maxWidth) {
@@ -305,23 +312,35 @@ class _WordGridState extends State<WordGrid> {
         _putBoxesInPlaces(viewportConstraints.maxWidth);
       },
 
-      onDragBoxTap: (DragBoxInfo? boxInfo, Offset position) async {
+      onBoxTap: (DragBoxInfo? boxInfo, Offset position) async {
         if (boxInfo == null) return null;
 
-        return widget.onDragBoxTap!.call(boxInfo.data.label, boxInfo.data.position);
+        return widget.onDragBoxTap!.call(boxInfo.data.ext.label, boxInfo.data.position);
       },
 
-      onChangeSize: (double newWidth, double newHeight){
-        widget.onChangeHeight?.call(newHeight);
+      onChangeSize: (double prevWidth, double newWidth, double prevHeight, double newHeight){
+        if (prevHeight != newHeight) {
+          widget.onChangeHeight?.call(newHeight);
+        }
       },
     );
   }
 
   void _addWord(String word) {
-    final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo) => boxInfo.data.label == word);
+    final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo) => boxInfo.data.ext.label == word && !boxInfo.data.visible);
     if (boxInfo != null) {
       boxInfo.setState(visible: true);
       return;
     }
+
+    _boxInfoList.add(
+        DragBoxInfo.create<GridBoxExt>(
+          builder: widget.onDragBoxBuild,
+          ext: GridBoxExt(label: word),
+        )
+    );
+
+    _rebuildStrNeed = true;
+    _boxAreaController.refresh();
   }
 }

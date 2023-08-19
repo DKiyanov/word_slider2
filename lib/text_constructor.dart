@@ -5,8 +5,6 @@ import 'package:word_slider2/word_panel.dart';
 import 'package:word_slider2/word_panel_model.dart';
 import 'package:simple_events/simple_events.dart';
 
-import 'drag_box_widget.dart';
-
 String _txtDialogInputText = 'Введите текст';
 
 class TextConstructorWidget extends StatefulWidget {
@@ -379,28 +377,28 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
     );
   }
 
-  Widget onDragBoxBuild(BuildContext context, String label, DragBoxSpec spec) {
-    if (spec == DragBoxSpec.editPos){
+  Widget onDragBoxBuild(BuildContext context, PanelBoxExt ext){ //String label, DragBoxSpec spec) {
+    if (ext.spec == DragBoxSpec.editPos){
       return editPos();
     }
 
-    if (spec == DragBoxSpec.insertPos){
+    if (ext.spec == DragBoxSpec.insertPos){
       return insertPos();
     }
 
-    return labelWidget(context, label, spec);
+    return labelWidget(context, ext.label, ext.spec);
   }
 
   Widget basementGroupHead(BuildContext context, String label) {
     return Text(label);
   }
 
-  Widget onBasementBoxBuild(BuildContext context, String label, DragBoxSpec spec) {
-    if (spec == DragBoxSpec.isGroup) {
-      return basementGroupHead(context, label);
+  Widget onBasementBoxBuild(BuildContext context, GridBoxExt ext) {
+    if (ext.isGroup) {
+      return basementGroupHead(context, ext.label);
     }
 
-    return labelWidget(context, label, DragBoxSpec.none);
+    return labelWidget(context, ext.label, DragBoxSpec.none);
   }
 
   double internalBoxHeight() {
