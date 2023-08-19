@@ -5,6 +5,8 @@ import 'package:word_slider2/word_panel.dart';
 import 'package:word_slider2/word_panel_model.dart';
 import 'package:simple_events/simple_events.dart';
 
+import 'drag_box_widget.dart';
+
 String _txtDialogInputText = 'Введите текст';
 
 class TextConstructorWidget extends StatefulWidget {
@@ -81,7 +83,12 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
       _historyPos = -1;
     }
 
-    _historyList.add(_panelController.text);
+    final text = _panelController.text;
+    if (_historyList.isNotEmpty && _historyList.last == text) {
+      return;
+    }
+
+    _historyList.add(text);
     _toolBarRefresh.send();
   }
 
@@ -221,6 +228,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
                         if (word.isEmpty) return;
 
                         final pos = _panelController.getCursorPos(lastPostIfNot: true);
+                        _panelController.saveCursor();
                         _panelController.insertWord(pos, word);
                         _panelController.refreshPanel();
                       },
@@ -299,29 +307,32 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
   }
 
   void deleteWord([int posAdd = 0]){
-    bool cursor = true;
     var pos = _panelController.getCursorPos(onlyCursor: true);
 
+    bool cursor = false;
     if (pos < 0) {
-      cursor = false;
       pos = _panelController.getFocusPos();
       if (pos < 0) return;
+    } else {
+      cursor = true;
     }
 
     pos += posAdd;
 
     if (pos < 0) return;
 
+    if (cursor) {
+      if (pos == 0) {
+        _panelController.saveCursor(pos + 1);
+      } else {
+        _panelController.saveCursor(pos);
+      }
+    }
+
     var word = _panelController.getWord(pos);
 
     _panelController.deleteWord(pos);
     _panelController.refreshPanel();
-
-    if (cursor) {
-      _panelController.setCursorPos(pos);
-    } else {
-      _panelController.setFocusPos(pos);
-    }
 
     if (word.substring(0,1) == '\$') {
       word = word.substring(1);
@@ -683,11 +694,15 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
     return value;
   }
 
-  Future<bool?> onBasementBoxTap(String label, Offset position) async {
+  void onBasementBoxTap(DragBoxInfo<GridBoxExt> boxInfo, Offset position) {
     final curPos = _panelController.getCursorPos(lastPostIfNot: true);
-    _panelController.insertWord(curPos, label);
+    _panelController.saveCursor();
+    _panelController.insertWord(curPos, boxInfo.data.ext.label);
     _panelController.refreshPanel();
-    return false;
+
+    if (_textConstructorData.notDelFromBasement) return;
+
+    boxInfo.setState(visible: false);
   }
 
   Future<String> wordInputDialog(BuildContext context) async {

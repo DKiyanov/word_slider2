@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'boxes_area.dart';
 import 'drag_box_widget.dart';
 
-typedef DragBoxTap = Future<bool?> Function(String label, Offset position);
+typedef DragBoxTap = void Function(DragBoxInfo<GridBoxExt> boxInfo, Offset position);
 typedef OnChangeHeight = void Function(double newHeight);
 
 class GridBoxExt{
@@ -153,12 +153,30 @@ class _WordGridState extends State<WordGrid> {
       final boxInfo = _boxInfoList[i];
       if (!boxInfo.data.ext.isGroup) continue;
 
-      boxInfo.setState(position: Offset(panelWidth / 2 - boxInfo.size.width / 2, _height));
+      if (!_groupIsVisible(i + 1)) {
+        boxInfo.setState(visible: false);
+        continue;
+      }
+
+      boxInfo.setState(visible: true, position: Offset(panelWidth / 2 - boxInfo.size.width / 2, _height));
 
       _height += boxInfo.size.height;
 
       _putBoxesGroup(i + 1, panelWidth);
     }
+  }
+
+  bool _groupIsVisible(int fromIndex) {
+    for (var i = fromIndex; i < _boxInfoList.length; i++) {
+      final boxInfo = _boxInfoList[i];
+      if (boxInfo.data.ext.isGroup) {
+        return false;
+      }
+
+      if (boxInfo.data.visible) return true;
+    }
+
+    return false;
   }
 
   void _putBoxesGroup(int fromIndex, double panelWidth) {
@@ -245,6 +263,7 @@ class _WordGridState extends State<WordGrid> {
     Offset nextPosition;
 
     double lineHeight = 0.0;
+    bool lineVisible = false;
 
     for (var i = fromIndex; i <= toIndex; i++) {
       final boxInfo = _boxInfoList[i];
@@ -257,12 +276,22 @@ class _WordGridState extends State<WordGrid> {
 
       nextPosition = Offset(position.dx + boxWidth, position.dy);
       if (nextPosition.dx > panelWidth){
-        position = Offset(0, position.dy + lineHeight + widget.lineSpacing);
+        if (lineVisible) {
+          position = Offset(0, position.dy + lineHeight + widget.lineSpacing);
+        } else {
+          position = Offset(0, position.dy);
+        }
+
         nextPosition = Offset(position.dx + boxWidth, position.dy);
+        lineVisible = false;
 
         if (i < toIndex) {
           lineHeight = 0.0;
         }
+      }
+
+      if (boxInfo.data.visible) {
+        lineVisible = true;
       }
 
       boxInfo.setState(position: position);
@@ -301,7 +330,7 @@ class _WordGridState extends State<WordGrid> {
     return BoxesArea<GridBoxExt>(
       controller: _boxAreaController,
 
-      onRebuildLayout: (BoxConstraints viewportConstraints, List<DragBoxInfo> boxInfoList) {
+      onRebuildLayout: (BoxConstraints viewportConstraints, List<DragBoxInfo<GridBoxExt>> boxInfoList) {
         if (_width != viewportConstraints.maxWidth) {
           _width = viewportConstraints.maxWidth;
           _rebuildStrNeed = true;
@@ -312,10 +341,9 @@ class _WordGridState extends State<WordGrid> {
         _putBoxesInPlaces(viewportConstraints.maxWidth);
       },
 
-      onBoxTap: (DragBoxInfo? boxInfo, Offset position) async {
-        if (boxInfo == null) return null;
-
-        return widget.onDragBoxTap!.call(boxInfo.data.ext.label, boxInfo.data.position);
+      onBoxTap: (DragBoxInfo<GridBoxExt>? boxInfo, Offset position) async {
+        if (boxInfo == null) return;
+        widget.onDragBoxTap!.call(boxInfo, boxInfo.data.position);
       },
 
       onChangeSize: (double prevWidth, double newWidth, double prevHeight, double newHeight){
@@ -330,15 +358,14 @@ class _WordGridState extends State<WordGrid> {
     final boxInfo = _boxInfoList.firstWhereOrNull((boxInfo) => boxInfo.data.ext.label == word && !boxInfo.data.visible);
     if (boxInfo != null) {
       boxInfo.setState(visible: true);
-      return;
+    } else {
+      _boxInfoList.add(
+          DragBoxInfo.create<GridBoxExt>(
+            builder: widget.onDragBoxBuild,
+            ext: GridBoxExt(label: word),
+          )
+      );
     }
-
-    _boxInfoList.add(
-        DragBoxInfo.create<GridBoxExt>(
-          builder: widget.onDragBoxBuild,
-          ext: GridBoxExt(label: word),
-        )
-    );
 
     _rebuildStrNeed = true;
     _boxAreaController.refresh();

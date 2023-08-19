@@ -3,23 +3,38 @@ import 'package:flutter/material.dart';
 
 import 'drag_box_widget.dart';
 
-typedef DragBoxTap<T> = Future<bool?> Function(DragBoxInfo<T>? boxInfo, Offset position);
+typedef DragBoxTap<T> = void Function(DragBoxInfo<T>? boxInfo, Offset position);
 typedef AreaPan = Function(Offset position);
 
 typedef OnChangeSize = void Function(double prevWidth, double newWidth, double prevHeight, double newHeight);
 typedef OnRebuildLayout<T> = void Function(BoxConstraints viewportConstraints, List<DragBoxInfo<T>> boxInfoList);
 
 class BoxesAreaController<T> {
-  _BoxesAreaState? _boxesAreaState;
+  _BoxesAreaState<T>? _boxesAreaState;
   final List<DragBoxInfo<T>> boxInfoList;
+  final List<DragBoxInfo<T>>? techBoxInfoList;
 
-  BoxesAreaController(this.boxInfoList);
+  BoxesAreaController(this.boxInfoList, {this.techBoxInfoList});
 
   void refresh() {
     if (_boxesAreaState == null) return;
     if (!_boxesAreaState!.mounted) return;
 
     _boxesAreaState!._refresh();
+  }
+
+  DragBoxInfo<T>? getBoxAtPos({Offset? position, Offset? globalPosition}) {
+    if (_boxesAreaState == null) return null;
+    if (!_boxesAreaState!.mounted) return null;
+
+    return _boxesAreaState!._getBoxAtPos(position: position, globalPosition: globalPosition);
+  }
+
+  bool isHeightChanged() {
+    if (_boxesAreaState == null) return false;
+    if (!_boxesAreaState!.mounted) return false;
+
+    return _boxesAreaState!._isHeightChanged();
   }
 }
 
@@ -53,11 +68,11 @@ class BoxesArea<T> extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<BoxesArea> createState() => _BoxesAreaState();
+  State<BoxesArea<T>> createState() => _BoxesAreaState<T>();
 }
 
-class _BoxesAreaState extends State<BoxesArea> {
-  late BoxesAreaController _controller;
+class _BoxesAreaState<T> extends State<BoxesArea<T>> {
+  late BoxesAreaController<T> _controller;
   final _stackKey = GlobalKey();
   bool  _starting = true;
 
@@ -77,6 +92,10 @@ class _BoxesAreaState extends State<BoxesArea> {
     widget.controller._boxesAreaState = this;
 
     final childList = _controller.boxInfoList.map((boxInfo)=>boxInfo.widget).toList();
+
+    if (_controller.techBoxInfoList != null) {
+      childList.addAll(_controller.techBoxInfoList!.map((boxInfo)=>boxInfo.widget).toList());
+    }
 
     return LayoutBuilder(builder: (BuildContext context, BoxConstraints viewportConstraints) {
       WidgetsBinding.instance.addPostFrameCallback((_){
@@ -165,11 +184,26 @@ class _BoxesAreaState extends State<BoxesArea> {
     }
   }
 
+  bool _isHeightChanged() {
+    double height = 0.0;
+
+    for (var boxInfo in _controller.boxInfoList) {
+      if (!boxInfo.data.visible) continue;
+
+      final bottom = boxInfo.data.position.dy + boxInfo.size.height;
+      if (height < bottom) {
+        height = bottom;
+      }
+    }
+
+    return height != _height;
+  }
+
   RenderBox _getStackRenderBox(){
     return _stackKey.currentContext!.findRenderObject() as RenderBox;
   }
 
-  Future<void> _onTapProcess(DragBoxTap? tapEvent, Offset globalPosition) async {
+  Future<void> _onTapProcess(DragBoxTap<T>? tapEvent, Offset globalPosition) async {
     if (tapEvent == null) return;
 
     final renderBox = _getStackRenderBox();
@@ -191,5 +225,15 @@ class _BoxesAreaState extends State<BoxesArea> {
   void _refresh() {
     _starting = true;
     setState(() {});
+  }
+
+  DragBoxInfo<T>? _getBoxAtPos({Offset? position, Offset? globalPosition}) {
+    if (position == null) {
+      final renderBox = _getStackRenderBox();
+      position = renderBox.globalToLocal(globalPosition!);
+    }
+
+    final boxInfo = _controller.boxInfoList.firstWhereOrNull((boxInfo)=>boxInfo.rect.contains(position!));
+    return boxInfo;
   }
 }
