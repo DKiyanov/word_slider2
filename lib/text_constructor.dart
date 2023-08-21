@@ -58,6 +58,9 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
   double _panelHeight = 0.0;
   double _basementHeight = 0.0;
 
+  final _panelKey = GlobalKey();
+  final _basementKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -116,7 +119,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
 
   Widget body(BoxConstraints viewportConstraints) {
 
-    if (_textConstructorData.basement.isEmpty || _basementHeight == 0.0) {
+    if (_basementHeight == 0.0) {
       return Column(
         children: [
 
@@ -126,11 +129,20 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
             child: wordPanel(),
           ),
 
+          Offstage( child: SizedBox(
+            height:  300,
+            child: basement(),
+          )),
+
         ],
       );
     }
 
     var panelHeight = _panelHeight;
+
+    if (panelHeight == 0.0) {
+      panelHeight = _panelController.wordBoxHeight * 2;
+    }
 
     if (panelHeight > (viewportConstraints.maxHeight - _basementMinHeight)) {
       panelHeight = viewportConstraints.maxHeight - _basementMinHeight;
@@ -174,6 +186,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
 
   Widget wordPanel() {
     return Padding(
+      key: _panelKey,
       padding: const EdgeInsets.all(6.0),
       child: WordPanel(
         controller         : _panelController,
@@ -195,6 +208,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
 
   Widget basement() {
     return Padding(
+      key: _basementKey,
       padding: const EdgeInsets.all(6.0),
       child: WordGrid(
         controller     : _basementController,
@@ -331,12 +345,17 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
 
     var word = _panelController.getWord(pos);
 
-    _panelController.deleteWord(pos);
-    _panelController.refreshPanel();
-
     if (word.substring(0,1) == '\$') {
       word = word.substring(1);
     }
+
+    final wordObject = getWordObjectFromLabel(word);
+    if (wordObject != null) {
+      if (wordObject.nonRemovable) return;
+    }
+
+    _panelController.deleteWord(pos);
+    _panelController.refreshPanel();
 
     _basementController.addWord(word);
   }
@@ -417,6 +436,20 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
     return _panelController.wordBoxHeight - 2;
   }
 
+  WordObject? getWordObjectFromLabel(String label) {
+    if (label.substring(0, 1) != '#') return null;
+
+    String objectName;
+    if (label.substring(2,3) == '|') {
+      objectName = label.substring(3);
+    } else {
+      objectName = label.substring(1);
+    }
+
+    final wordObject = _textConstructorData.objects.firstWhereOrNull((wordObject) => wordObject.name == objectName)!;
+    return wordObject;
+  }
+
   Widget labelWidget(BuildContext context, String label, DragBoxSpec spec) {
     if (label.isEmpty) return Container();
 
@@ -428,7 +461,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
         ),
         borderColor     : _borderColor,
         borderWidth     : _borderWidth,
-        backgroundColor : _colorWordNormal,
+        backgroundColor : spec == DragBoxSpec.move? _colorWordMove : _colorWordNormal,
       );
     }
 
@@ -703,6 +736,7 @@ class _TextConstructorWidgetState extends State<TextConstructorWidget> {
     if (_textConstructorData.notDelFromBasement) return;
 
     boxInfo.setState(visible: false);
+    _basementController.refresh();
   }
 
   Future<String> wordInputDialog(BuildContext context) async {

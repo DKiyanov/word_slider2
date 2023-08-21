@@ -64,6 +64,13 @@ class WordPanelController {
     return _panelState!._getWord(pos);
   }
 
+  DragBoxInfo<PanelBoxExt>? getBoxAtPos(int pos) {
+    if (_panelState == null) return null;
+    if (!_panelState!.mounted) return null;
+
+    return _panelState!._getBoxAtPos(pos);
+  }
+
   String _getText(){
     if (_panelState == null) return _text;
     if (!_panelState!.mounted) return _text;
@@ -365,6 +372,10 @@ class WordPanelState extends State<WordPanel> {
     }
 
     return ret;
+  }
+
+  DragBoxInfo<PanelBoxExt> _getBoxAtPos(int pos) {
+    return _boxInfoList[pos];
   }
 
   String _getWord(int pos){
@@ -748,7 +759,7 @@ class WordPanelState extends State<WordPanel> {
     if (labelChanged) {
       widget.controller.onChange?.call();
       _rebuildStrNeed = true;
-      setState(() {});
+      widget.controller.refreshPanel();
     }
   }
 

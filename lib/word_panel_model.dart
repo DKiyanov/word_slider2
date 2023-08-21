@@ -20,9 +20,10 @@ class JrfTextConstructor {
 }
 
 class JtfWordObject {
-  static const String name      = 'name';
-  static const String viewIndex = 'viewIndex';
-  static const String views     = 'views';
+  static const String name         = 'name';
+  static const String viewIndex    = 'viewIndex';
+  static const String nonRemovable = 'nonRemovabl';
+  static const String views        = 'views';
 }
 
 class TextConstructorData {
@@ -115,25 +116,29 @@ class TextConstructorData {
 class WordObject {
   final String name;
   final int viewIndex;
+  final bool nonRemovable;
   final List<String> views;
 
   WordObject({
     required this.name,
     required this.viewIndex,
+    required this.nonRemovable,
     required this.views
   });
 
   factory WordObject.fromMap(Map<String, dynamic> json) {
     return WordObject(
-      name      : json[JtfWordObject.name],
-      viewIndex : json[JtfWordObject.viewIndex]??0,
-      views     : valueListFromMapList<String>(json[JtfWordObject.views]),
+      name         : json[JtfWordObject.name],
+      viewIndex    : json[JtfWordObject.viewIndex]??0,
+      nonRemovable : json[JtfWordObject.nonRemovable]??false,
+      views        : valueListFromMapList<String>(json[JtfWordObject.views]),
     );
   }
 
   Map<String, dynamic> toJson() => {
     JtfWordObject.name      :name,
     JtfWordObject.viewIndex :viewIndex,
+    JtfWordObject.nonRemovable :nonRemovable,
     JtfWordObject.views     :views,
   };
 }

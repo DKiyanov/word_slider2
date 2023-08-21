@@ -16,6 +16,7 @@ const String textConstructorJson = '''
      {
       "name" :  "символ",
       "viewIndex": 1,
+      "notDelete": true,
       "views": ["2|", "3|"]
      },
      

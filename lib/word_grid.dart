@@ -28,6 +28,13 @@ class WordGridController {
 
     _gridState!._addWord(word);
   }
+
+  void refresh() {
+    if (_gridState == null) return;
+    if (!_gridState!.mounted) return;
+
+    _gridState!._refresh();
+  }
 }
 
 class WordGrid extends StatefulWidget {
@@ -133,6 +140,8 @@ class _WordGridState extends State<WordGrid> {
   }
 
   void _putBoxesInPlaces(double panelWidth){
+    if (_boxInfoList.isEmpty) return;
+
     if (_initHideList.isNotEmpty) {
       for (var boxInfo in _boxInfoList) {
         if (_initHideList.contains(boxInfo)) {
@@ -368,6 +377,10 @@ class _WordGridState extends State<WordGrid> {
     }
 
     _rebuildStrNeed = true;
+    _boxAreaController.refresh();
+  }
+
+  void _refresh() {
     _boxAreaController.refresh();
   }
 }
